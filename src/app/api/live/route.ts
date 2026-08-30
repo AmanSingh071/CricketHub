@@ -150,7 +150,7 @@ function mapUnofficial(payload: any): Match[] {
 
   return rows.map((raw: any) => {
     const id = text(raw?.id ?? raw?.matchId);
-    const teams = Array.isArray(raw?.teams)
+    const teams: string[] = Array.isArray(raw?.teams)
       ? raw.teams.map((x: any) => text(x?.team ?? x?.name ?? x)).filter(Boolean)
       : splitTeams(text(raw?.title ?? raw?.name));
     const score: Score[] = (Array.isArray(raw?.teams) ? raw.teams : []).map((x: any, i: number) => {
