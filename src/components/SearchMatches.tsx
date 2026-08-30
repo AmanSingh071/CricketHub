@@ -19,24 +19,29 @@ export default function SearchMatches() {
 
   async function search(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
+
     setLoading(true);
     setMessage("");
 
     try {
       const params = new URLSearchParams();
-      if (query.trim()) params.set("q", query.trim());
+      const trimmedQuery = query.trim();
+
+      if (trimmedQuery) params.set("q", trimmedQuery);
       if (date) params.set("date", date);
 
-      const response = await fetch("/api/search?" + params.toString(), {
+      const response = await fetch(`/api/search?${params.toString()}`, {
         cache: "no-store",
       });
+
       const payload = await response.json();
 
       if (!response.ok) {
         throw new Error(payload?.message || "Search failed");
       }
 
-      const matches = Array.isArray(payload?.data) ? payload.data : [];
+      const matches: Match[] = Array.isArray(payload?.data) ? payload.data : [];
+
       setRows(matches);
 
       if (matches.length === 0) {
@@ -57,9 +62,11 @@ export default function SearchMatches() {
       </a>
 
       <p className="mt-8 text-xs font-black tracking-[.2em] text-sky-400">
-        🔎 MATCH FINDER
+        MATCH FINDER
       </p>
+
       <h1 className="mt-2 text-4xl font-black">Search cricket matches</h1>
+
       <p className="mt-3 text-slate-400">
         Search by team, match name or match ID, and narrow the results by date.
       </p>
@@ -74,12 +81,14 @@ export default function SearchMatches() {
           placeholder="England vs Pakistan, India, IPL, match ID…"
           className="rounded-xl border border-[#29445e] bg-black/20 px-4 py-3 outline-none focus:border-green-400"
         />
+
         <input
           type="date"
           value={date}
           onChange={(event) => setDate(event.target.value)}
           className="rounded-xl border border-[#29445e] bg-black/20 px-4 py-3 outline-none focus:border-green-400"
         />
+
         <button
           type="submit"
           disabled={loading}
@@ -93,31 +102,34 @@ export default function SearchMatches() {
         {rows.map((match) => (
           <a
             key={match.id}
-            href={"/match/" + match.id}
+            href={`/match/${match.id}`}
             className="card block rounded-2xl p-5 hover:border-green-400/60"
           >
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="font-black">{match.name}</p>
+
                 <p className="mt-2 text-sm text-slate-400">
                   {match.date || "Date not published"}
-                  {match.venue ? " • " + match.venue : ""}
+                  {match.venue ? ` • ${match.venue}` : ""}
                 </p>
+
                 <p className="mt-2 text-xs text-green-400">
                   {match.status || "Match center available"}
                 </p>
               </div>
+
               <span className="font-bold text-green-400">Open →</span>
             </div>
           </a>
         ))}
       </div>
 
-      {message && (
+      {message ? (
         <div className="card mt-8 rounded-2xl p-5 text-slate-400">
           {message}
         </div>
-      )}
+      ) : null}
     </main>
   );
 }
