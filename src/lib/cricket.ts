@@ -23,7 +23,7 @@ async function own(path:string,revalidate:number){
 /* Self-hosted cricket data only. No third-party API key or quota. */
 export async function getCurrentMatches():Promise<CricketMatch[]>{
   try{
-    const j=await own("/api/live",60);
+    const j=await own("/api/live",15);
     return Array.isArray(j?.data)?j.data:[];
   }catch{return []}
 }
