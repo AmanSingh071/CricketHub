@@ -4,103 +4,202 @@ export const runtime="nodejs";
 export const dynamic="force-dynamic";
 export const revalidate=0;
 
-const HEADERS={"user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36","accept":"application/json,text/html,application/xhtml+xml;q=0.9,*/*;q=0.8","accept-language":"en-US,en;q=0.9","referer":"https://www.cricbuzz.com/"};
+const HEADERS={
+  "User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Referer":"https://www.cricbuzz.com/",
+  "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language":"en-US,en;q=0.9"
+};
 
-function clean(s:any){return String(s??"").replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;/g,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim()}
-function num(v:any){const n=Number(v);return Number.isFinite(n)?n:v}
-function balanced(t:string,start:number){if(start<0||t[start]!=="{")return null;let d=0,q=false,e=false;for(let i=start;i<t.length;i++){const c=t[i];if(q){if(e)e=false;else if(c==="\\")e=true;else if(c==='"')q=false;continue}if(c==='"'){q=true;continue}if(c==="{")d++;else if(c==="}"&&--d===0)return t.slice(start,i+1)}return null}
-
-async function getJson(url:string){
-  const r=await fetch(url,{cache:"no-store",headers:HEADERS,redirect:"follow"});
-  const text=await r.text();
-  if(!r.ok)throw new Error("HTTP "+r.status+" from "+new URL(url).hostname);
-  try{return JSON.parse(text)}catch{throw new Error("Non-JSON response from "+new URL(url).hostname)}
+function decodeUnicodeEscape(value:string){
+  // Matches the proven Python .encode().decode('unicode_escape') strategy,
+  // while preserving JSON-safe escaped quotes and Unicode.
+  try{return JSON.parse('"'+value.replace(/\\/g,"\\\\").replace(/"/g,'\\\"')+'"')}catch{}
+  try{return value.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\n/g,"\n").replace(/\\r/g,"\r").replace(/\\t/g,"\t").replace(/\\\"/g,'"').replace(/\\\\/g,"\\")}catch{return value}
 }
 
-function extractRsc(html:string){
-  let from=0;
-  while(true){
-    const idx=html.indexOf("scorecardApiData",from); if(idx<0)return null;
-    const push=html.lastIndexOf("self.__next_f.push",idx);
-    if(push>=0){
-      const chunk=html.slice(push); const a=chunk.indexOf('"');
-      if(a>=0){let b=-1,esc=false;for(let i=a+1;i<chunk.length;i++){const c=chunk[i];if(esc){esc=false;continue}if(c==="\\"){esc=true;continue}if(c==='"'){b=i;break}}
-        if(b>a){try{const decoded=JSON.parse(chunk.slice(a,b+1));const k=decoded.indexOf("scorecardApiData");const raw=balanced(decoded,decoded.indexOf("{",k));if(raw){const data=JSON.parse(raw);if(Array.isArray(data?.scoreCard))return data}}catch{}}
-      }
-    }
-    from=idx+16;
+function extractBalanced(text:string,start:number){
+  if(start<0||text[start]!=="{")return null;
+  let depth=0,inString=false,escape=false;
+  for(let i=start;i<text.length;i++){
+    const c=text[i];
+    if(inString){if(escape){escape=false;continue}if(c==="\\"){escape=true;continue}if(c==='"')inString=false;continue}
+    if(c==='"'){inString=true;continue}
+    if(c==="{")depth++;
+    if(c==="}"&&--depth===0)return text.slice(start,i+1);
   }
+  return null;
 }
 
-function normalizeNative(data:any,id:string,source:string){
+function extractScorecardApiData(html:string){
+  const idx=html.indexOf("scorecardApiData");
+  if(idx===-1)return null;
+
+  // Exact scraper pattern used by the working Cricbuzz v2 project:
+  // find the RSC push immediately before scorecardApiData and decode that chunk.
+  const start=html.lastIndexOf("self.__next_f.push",idx);
+  if(start<0)return null;
+  const chunk=html.slice(start);
+  const firstQuote=chunk.indexOf('"');
+  if(firstQuote<0)return null;
+
+  const markers=['"]\n','"])','"]</script>'];
+  let end=-1;
+  for(const marker of markers){
+    const p=chunk.indexOf(marker,firstQuote+1);
+    if(p!==-1){end=p;break}
+  }
+  if(end<0)return null;
+
+  let payload=chunk.slice(firstQuote+1,end);
+  payload=decodeUnicodeEscape(payload);
+
+  const key=payload.indexOf("scorecardApiData");
+  if(key<0)return null;
+  const brace=payload.indexOf("{",key);
+  const raw=extractBalanced(payload,brace);
+  if(!raw)return null;
+  try{
+    const data=JSON.parse(raw);
+    return Array.isArray(data?.scoreCard)?data:null;
+  }catch{return null}
+}
+
+function normalize(data:any,id:string){
   const cards=Array.isArray(data?.scoreCard)?data.scoreCard:[];
-  const innings=cards.map((sc:any,i:number)=>{
-    const sd=sc?.scoreDetails||{},bd=sc?.batTeamDetails||{},wd=sc?.bowlTeamDetails||{};
-    const batting=Object.values(bd?.batsmenData||{}).map((x:any)=>({batsman:x?.batName||x?.name||"",dismissal:x?.outDesc||"not out",runs:x?.runs??"",balls:x?.balls??"",fours:x?.fours??"",sixes:x?.sixes??"",strikeRate:x?.strikeRate??""})).filter((x:any)=>x.batsman);
-    const bowling=Object.values(wd?.bowlersData||{}).map((x:any)=>({bowler:x?.bowlName||x?.name||"",overs:x?.overs??"",maidens:x?.maidens??"",runs:x?.runs??"",wickets:x?.wickets??"",noBalls:x?.no_balls??x?.noBalls??"",wides:x?.wides??"",economy:x?.economy??""})).filter((x:any)=>x.bowler);
-    return {inning:bd?.batTeamName||"Innings "+(i+1),batting,bowling,extras:{runs:sd?.extras??""},total:{runs:sd?.runs,wickets:sd?.wickets,overs:sd?.overs}};
-  }).filter((x:any)=>x.batting.length||x.bowling.length||x.total.runs!==undefined);
-  const h=data?.matchHeader||{};
-  return {status:"success",id,name:h?.matchDescription||h?.seriesName||"Detailed Scorecard",matchStatus:h?.status||"Live",scorecard:innings,toss:h?.tossResults?.tossWinnerName?{winner:h.tossResults.tossWinnerName,decision:h.tossResults.decision||""}:null,result:h?.result?.winningTeam?{winner:h.result.winningTeam,margin:h.result.winningMargin,byRuns:h.result.winByRuns,byInnings:h.result.winByInnings}:null,playingEleven:{},source};
-}
-
-function normalizeBridge(raw:any,id:string,source:string){
-  const d=raw?.data||raw?.result||raw;
-  // Common unofficial Cricbuzz wrappers expose innings under one of these keys.
-  const candidate=d?.scorecard||d?.scoreCard||d?.innings||d?.scoreCardData||[];
-  const arr=Array.isArray(candidate)?candidate:[];
-  const innings=arr.map((inn:any,i:number)=>{
-    const bat=inn?.batting||inn?.Batsman||inn?.batsmen||inn?.batsman||[];
-    const bowl=inn?.bowling||inn?.Bowlers||inn?.bowlers||[];
-    const bArr=Array.isArray(bat)?bat:Object.values(bat||{});
-    const bwArr=Array.isArray(bowl)?bowl:Object.values(bowl||{});
-    return {inning:inn?.inning||inn?.team||inn?.battingTeam||inn?.batTeamName||"Innings "+(i+1),
-      batting:bArr.map((x:any)=>({batsman:x?.name||x?.batsman||x?.batName||x?.player||"",dismissal:x?.dismissal||x?.outDesc||"not out",runs:x?.runs??x?.R??"",balls:x?.balls??x?.B??"",fours:x?.fours??x?.["4s"]??"",sixes:x?.sixes??x?.["6s"]??"",strikeRate:x?.sr??x?.strikeRate??""})).filter((x:any)=>x.batsman),
-      bowling:bwArr.map((x:any)=>({bowler:x?.name||x?.bowler||x?.bowlName||x?.player||"",overs:x?.overs??x?.O??"",maidens:x?.maidens??x?.M??"",runs:x?.runs??x?.R??"",wickets:x?.wickets??x?.W??x?.wicket??"",noBalls:x?.noBalls??x?.no_balls??"",wides:x?.wides??"",economy:x?.economy??x?.econ??""})).filter((x:any)=>x.bowler),
-      extras:{runs:inn?.extras?.runs??inn?.extras??""},total:{runs:inn?.runs??inn?.score?.runs,wickets:inn?.wickets??inn?.score?.wickets,overs:inn?.overs??inn?.score?.overs}
+  const innings=cards.map((sc:any,index:number)=>{
+    const score=sc?.scoreDetails||{};
+    const bat=sc?.batTeamDetails||{};
+    const bowl=sc?.bowlTeamDetails||{};
+    const batting=Object.values(bat?.batsmenData||{}).map((p:any)=>({
+      batsman:p?.batName||"",
+      dismissal:p?.outDesc||"batting",
+      runs:p?.runs??"",
+      balls:p?.balls??"",
+      fours:p?.fours??"",
+      sixes:p?.sixes??"",
+      strikeRate:p?.strikeRate??""
+    })).filter((p:any)=>p.batsman);
+    const bowling=Object.values(bowl?.bowlersData||{}).map((p:any)=>({
+      bowler:p?.bowlName||"",
+      overs:p?.overs??"",
+      maidens:p?.maidens??"",
+      runs:p?.runs??"",
+      wickets:p?.wickets??"",
+      noBalls:p?.noBalls??p?.no_balls??"",
+      wides:p?.wides??"",
+      economy:p?.economy??""
+    })).filter((p:any)=>p.bowler);
+    return {
+      inning:bat?.batTeamName||"Innings "+(index+1),
+      batting,bowling,
+      extras:{runs:score?.extras??""},
+      total:{runs:score?.runs,wickets:score?.wickets,overs:score?.overs}
     };
   }).filter((x:any)=>x.batting.length||x.bowling.length||x.total.runs!==undefined);
-  return {status:"success",id,name:clean(d?.title||d?.name||d?.matchTitle||"Detailed Scorecard"),matchStatus:clean(d?.update||d?.status||"Live"),scorecard:innings,playingEleven:d?.playingEleven||d?.playing_eleven||{},source};
+
+  const header=data?.matchHeader||{};
+  const playing:any={};
+  for(const sc of cards){
+    const team=sc?.batTeamDetails||{};
+    const names=Object.values(team?.batsmenData||{}).map((p:any)=>p?.batName).filter(Boolean);
+    if(team?.batTeamName&&names.length)playing[team.batTeamName]=Array.from(new Set(names));
+  }
+
+  return {
+    status:"success",
+    id,
+    name:header?.matchDescription||header?.seriesName||"Detailed Scorecard",
+    matchStatus:header?.status||"Live",
+    scorecard:innings,
+    playingEleven:playing,
+    toss:header?.tossResults?.tossWinnerName?{winner:header.tossResults.tossWinnerName,decision:header.tossResults.decision||""}:null,
+    result:header?.result?.winningTeam?{winner:header.result.winningTeam,margin:header.result.winningMargin,byRuns:header.result.winByRuns,byInnings:header.result.winByInnings}:null,
+    source:"cricbuzz-next-rsc"
+  };
 }
 
-function miniScore(raw:any,id:string){
-  const m=raw?.miniscore||raw?.miniScore||{};
+function liveFallback(raw:any,id:string){
+  const m=raw?.miniscore||{};
   const h=raw?.matchHeader||{};
-  const score=m?.batTeam||{};
-  const striker=m?.batsmanStriker||{},non=m?.batsmanNonStriker||{},bowler=m?.bowlerStriker||m?.bowler||{};
-  const team=m?.batTeamScoreObj?.teamName||h?.team1?.teamName||"Current innings";
-  const bat=[
-    {batsman:striker?.name||striker?.batName||"",dismissal:"batting",runs:striker?.runs??"",balls:striker?.balls??"",fours:striker?.fours??"",sixes:striker?.sixes??"",strikeRate:striker?.strikeRate??striker?.sr??""},
-    {batsman:non?.name||non?.batName||"",dismissal:"batting",runs:non?.runs??"",balls:non?.balls??"",fours:non?.fours??"",sixes:non?.sixes??"",strikeRate:non?.strikeRate??non?.sr??""}
+  const bt=m?.batTeam||{};
+  const striker=m?.batsmanStriker||{};
+  const non=m?.batsmanNonStriker||{};
+  const bowler=m?.bowlerStriker||{};
+  const team=m?.batTeamScoreObj?.teamName||"Current innings";
+  const batting=[
+    {batsman:striker?.name||"",dismissal:"batting",runs:striker?.runs??"",balls:striker?.balls??"",fours:striker?.fours??"",sixes:striker?.sixes??"",strikeRate:striker?.strikeRate??""},
+    {batsman:non?.name||"",dismissal:"batting",runs:non?.runs??"",balls:non?.balls??"",fours:non?.fours??"",sixes:non?.sixes??"",strikeRate:non?.strikeRate??""}
   ].filter(x=>x.batsman);
-  const bowl=[{bowler:bowler?.name||bowler?.bowlName||"",overs:bowler?.overs??bowler?.bowlOvs??"",maidens:bowler?.maidens??"",runs:bowler?.runs??bowler?.bowlRuns??"",wickets:bowler?.wickets??bowler?.bowlWkts??"",economy:bowler?.economy??bowler?.bowlEcon??""}].filter(x=>x.bowler);
-  const runs=score?.teamScore??m?.teamScore, wickets=score?.teamWkts??m?.teamWkts, overs=m?.overs;
-  if(!bat.length&&!bowl.length&&runs===undefined)return null;
-  return {status:"success",id,name:h?.matchDescription||h?.seriesName||"Live Score",matchStatus:m?.status||h?.status||"Live",scorecard:[{inning:team,batting:bat,bowling:bowl,extras:{runs:""},total:{runs,wickets,overs}}],playingEleven:{},source:"cricbuzz-public-live-json"};
+  const bowling=[{
+    bowler:bowler?.name||"",
+    overs:bowler?.overs??bowler?.bowlOvs??"",
+    maidens:bowler?.maidens??"",
+    runs:bowler?.runs??bowler?.bowlRuns??"",
+    wickets:bowler?.wickets??bowler?.bowlWkts??"",
+    noBalls:"",
+    wides:"",
+    economy:bowler?.economy??bowler?.bowlEcon??""
+  }].filter(x=>x.bowler);
+
+  if(!batting.length&&!bowling.length&&bt?.teamScore===undefined)return null;
+
+  return {
+    status:"success",id,
+    name:h?.matchDescription||h?.seriesName||"Live Score",
+    matchStatus:m?.status||h?.status||"Live",
+    scorecard:[{
+      inning:team,
+      batting,bowling,
+      extras:{runs:""},
+      total:{runs:bt?.teamScore??m?.teamScore,wickets:bt?.teamWkts??m?.teamWkts,overs:m?.overs}
+    }],
+    playingEleven:{},
+    source:"cricbuzz-mcenter-live"
+  };
 }
 
-async function tryDirect(id:string){
-  const errors:string[]=[];
-  // 1) Structured scorecard page scrape.
-  try{
-    const r=await fetch("https://www.cricbuzz.com/live-cricket-scorecard/"+id,{cache:"no-store",headers:HEADERS});
-    const html=await r.text();
-    if(r.ok){const data=extractRsc(html);if(data)return {data:normalizeNative(data,id,"cricbuzz-direct-rsc"),errors};errors.push("direct page reached but scorecard payload was absent")}
-    else errors.push("direct scorecard HTTP "+r.status);
-  }catch(e){errors.push(e instanceof Error?e.message:"direct scorecard failed")}
-  // 2) Public live JSON, independent of HTML/RSC parsing.
-  try{const j=await getJson("https://www.cricbuzz.com/api/mcenter/comm/"+id);const data=miniScore(j,id);if(data)return {data,errors};errors.push("public live JSON had no score")}catch(e){errors.push(e instanceof Error?e.message:"public live JSON failed")}
-  // 3) Detailed bridge scraper, only as a resilience fallback.
-  try{const j=await getJson("https://cric-api.vercel.app/i?id="+encodeURIComponent(id));const data=normalizeBridge(j,id,"fallback-detailed-scraper");if(data.scorecard.length)return {data,errors};errors.push("detailed bridge returned no innings")}catch(e){errors.push(e instanceof Error?e.message:"detailed bridge failed")}
-  // 4) Last-resort live scraper bridge.
-  try{const j=await getJson("https://cricbuzz-live.vercel.app/v1/score/"+encodeURIComponent(id));const d=j?.data||{};const score=String(d?.liveScore||"").match(/(.*?)\s*(\d+)\s*[\/-]\s*(\d+)\s*\(([^)]+)\)/);const bat=[{batsman:d?.batsmanOne||"",dismissal:"batting",runs:d?.batsmanOneRun||"",balls:String(d?.batsmanOneBall||"").replace(/[()]/g,""),fours:"",sixes:"",strikeRate:d?.batsmanOneSR||""},{batsman:d?.batsmanTwo||"",dismissal:"batting",runs:d?.batsmanTwoRun||"",balls:String(d?.batsmanTwoBall||"").replace(/[()]/g,""),fours:"",sixes:"",strikeRate:d?.batsmanTwoSR||""}].filter(x=>x.batsman);const bowl=[{bowler:d?.bowlerOne||"",overs:d?.bowlerOneOver||"",maidens:"",runs:d?.bowlerOneRun||"",wickets:d?.bowlerOneWickets||"",economy:d?.bowlerOneEconomy||""},{bowler:d?.bowlerTwo||"",overs:d?.bowlerTwoOver||"",maidens:"",runs:d?.bowlerTwoRun||"",wickets:d?.bowlerTwoWicket||"",economy:d?.bowlerTwoEconomy||""}].filter(x=>x.bowler);if(bat.length||bowl.length||score)return {data:{status:"success",id,name:d?.title||"Live Score",matchStatus:d?.update||"Live",scorecard:[{inning:score?.[1]?.trim()||"Current innings",batting:bat,bowling:bowl,extras:{runs:""},total:{runs:score?num(score[2]):"",wickets:score?num(score[3]):"",overs:score?.[4]||""}}],playingEleven:{},source:"fallback-live-scraper"},errors};errors.push("live bridge returned no player data")}catch(e){errors.push(e instanceof Error?e.message:"live bridge failed")}
-  return {data:null,errors};
+async function fetchText(url:string){
+  const r=await fetch(url,{cache:"no-store",headers:HEADERS,redirect:"follow"});
+  const text=await r.text();
+  return {r,text};
 }
 
 export async function GET(req:NextRequest){
   const id=req.nextUrl.searchParams.get("score")||"";
-  if(!/^\d+$/.test(id))return NextResponse.json({status:"error",message:"Invalid match id"},{status:400});
-  const {data,errors}=await tryDirect(id);
-  if(data)return NextResponse.json({...data,debug:process.env.NODE_ENV==="development"?errors:undefined},{headers:{"Cache-Control":"no-store, max-age=0"}});
-  return NextResponse.json({status:"error",message:"Scorecard source temporarily unavailable",debug:errors},{status:502});
+  if(!/^\d+$/.test(id))return NextResponse.json({status:"error",message:"Invalid Cricbuzz match id"},{status:400});
+
+  const debug:string[]=[];
+
+  // Primary: exact Next.js scorecard RSC scrape.
+  try{
+    const {r,text}=await fetchText("https://www.cricbuzz.com/live-cricket-scorecard/"+id);
+    debug.push("scorecard HTTP "+r.status+" bytes="+text.length);
+    if(r.ok){
+      const embedded=extractScorecardApiData(text);
+      if(embedded){
+        const normalized=normalize(embedded,id);
+        if(normalized.scorecard.length)return NextResponse.json(normalized,{headers:{"Cache-Control":"no-store"}});
+        debug.push("RSC parsed but innings were empty");
+      }else debug.push("scorecardApiData not extracted");
+    }
+  }catch(e){debug.push("scorecard fetch failed: "+(e instanceof Error?e.message:"unknown"))}
+
+  // Secondary: current live-state endpoint.
+  try{
+    const r=await fetch("https://www.cricbuzz.com/api/mcenter/comm/"+id,{cache:"no-store",headers:{...HEADERS,Accept:"application/json"}});
+    const text=await r.text();
+    debug.push("mcenter HTTP "+r.status+" bytes="+text.length);
+    if(r.ok){
+      const j=JSON.parse(text);
+      const fallback=liveFallback(j,id);
+      if(fallback)return NextResponse.json(fallback,{headers:{"Cache-Control":"no-store"}});
+    }
+  }catch(e){debug.push("mcenter failed: "+(e instanceof Error?e.message:"unknown"))}
+
+  return NextResponse.json({
+    status:"error",
+    message:"Cricbuzz did not return scorecard data for this match",
+    debug
+  },{status:502,headers:{"Cache-Control":"no-store"}});
 }
