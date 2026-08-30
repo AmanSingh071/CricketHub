@@ -77,11 +77,11 @@ export default async function MatchPage({
       {/* Embedded Stream Player */}
       <section className="card mt-6 overflow-hidden rounded-3xl bg-black">
         <iframe
-          src="https://playcrichd.st/update/fetch.php?hd=11&embed=1"
+          src="https://daddylive.app/player/embed.php?id=admin/ppv-2-nd-test-england-vs-pakistan/1"
           width="100%"
-          height="500"
+          height="380px"
+          style={{ border: 0 }}
           scrolling="no"
-          frameBorder="0"
           allowFullScreen
           allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
           title="Cricket Stream Player"
