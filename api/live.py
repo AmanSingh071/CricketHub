@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 app = FastAPI(title="CricketHub Live Feed", docs_url=None, redoc_url=None)
 
 CACHE: dict[str, Any] = {"at": 0.0, "data": [], "error": None}
-TTL = 30
+TTL = 15
 HEADER_URL = "https://site.api.espn.com/apis/personalized/v2/scoreboard/header?sport=cricket&region=in&tz=Asia/Calcutta"
 SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/cricket/{league}/scoreboard"
 
@@ -44,7 +44,7 @@ def normalize_event(event: dict, league_id: str, league_name: str):
             score.append({"inning": clean(team.get("abbreviation") or name), "r": c.get("score")})
     state = clean((status.get("type") or {}).get("state")).lower()
     completed = bool((status.get("type") or {}).get("completed")) or state in ("post", "final")
-    started = state in ("in", "live", "inprogress") or not completed
+    started = state in ("in", "live", "inprogress", "active")
     event_id = str(event.get("id"))
     return {
         "id": f"{league_id}:{event_id}",
