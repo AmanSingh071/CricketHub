@@ -79,8 +79,14 @@ export default async function Home() {
                     {match && <p className="mt-3 text-sm font-bold text-green-300">{scoreText(match.score)}</p>}
                     {match?.status && <p className="mt-2 text-xs text-slate-400">{match.status}</p>}
                   </div>
+                ) : liveMatches.length ? (
+                  <a href="/live" className="mt-6 block rounded-2xl bg-green-500/[.06] p-4 transition hover:bg-green-500/[.12]">
+                    <p className="text-xs font-bold tracking-wider text-green-400">🔴 LIVE CRICKET AVAILABLE</p>
+                    <h3 className="mt-2 text-lg font-black">{liveMatches.length} live match{liveMatches.length === 1 ? "" : "es"} right now</h3>
+                    <p className="mt-2 text-sm text-slate-400">Open live matches to see the current scores and detailed scorecards.</p>
+                  </a>
                 ) : (
-                  <p className="mt-6 rounded-2xl bg-white/[.03] p-4 text-sm text-slate-400">No current match has been assigned to this channel yet.</p>
+                  <a href="/live" className="mt-6 block rounded-2xl bg-white/[.03] p-4 text-sm text-slate-400 transition hover:border-green-400/40">Open the live cricket feed →</a>
                 )}
               </a>
             ))}
