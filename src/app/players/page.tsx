@@ -1,1 +1,29 @@
-import { getCurrentMatches,uniqueTeams } from "@/lib/cricket";export const revalidate=1800;export default async function Players(){const teams=uniqueTeams(await getCurrentMatches());return <main className="mx-auto min-h-screen max-w-6xl px-4 py-8"><a href="/" className="text-green-400">← CricketHub</a><h1 className="mt-8 text-4xl font-black">Players</h1><p className="mt-2 text-slate-400">Player profiles will populate when player/squad endpoints are connected. No invented player statistics are shown.</p><div className="card mt-8 rounded-3xl p-6"><h2 className="text-xl font-black">Available team context</h2><div className="mt-5 flex flex-wrap gap-2">{teams.map(t=><span className="rounded-full bg-white/5 px-4 py-2 text-sm" key={t}>{t}</span>)}</div></div></main>
+import { getCurrentMatches, uniqueTeams } from "@/lib/cricket";
+
+export const revalidate = 1800;
+
+export default async function Players() {
+  const teams = uniqueTeams(await getCurrentMatches());
+
+  return (
+    <main className="mx-auto min-h-screen max-w-6xl px-4 py-8">
+      <a href="/" className="text-green-400">← CricketHub</a>
+      <h1 className="mt-8 text-4xl font-black">Players</h1>
+      <p className="mt-2 text-slate-400">
+        Player profiles will populate when player/squad endpoints are connected.
+        No invented player statistics are shown.
+      </p>
+
+      <div className="card mt-8 rounded-3xl p-6">
+        <h2 className="text-xl font-black">Available team context</h2>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {teams.map((t) => (
+            <span className="rounded-full bg-white/5 px-4 py-2 text-sm" key={t}>
+              {t}
+            </span>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
