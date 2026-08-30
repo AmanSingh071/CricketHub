@@ -178,6 +178,68 @@ function mapUnofficial(payload: any): Match[] {
   }).filter((x: Match) => /^\d+$/.test(x.id));
 }
 
+
+function cleanHtml(value: string) {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseHtmlLive(html: string): Match[] {
+  const matches = new Map<string, Match>();
+  const linkRe = /<a\b[^>]*href=["']([^"']*\/live-cricket-scores\/(\d+)[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let link: RegExpExecArray | null;
+
+  while ((link = linkRe.exec(html))) {
+    const id = link[2];
+    const around = html.slice(Math.max(0, link.index - 2500), Math.min(html.length, link.index + 6000));
+    const surrounding = cleanHtml(around);
+    const anchorText = cleanHtml(link[3]);
+
+    let name = anchorText;
+    if (!/\bvs\.?\b/i.test(name)) {
+      const m = surrounding.match(/([A-Za-z][A-Za-z .&'()\-]{1,80}?\s+vs\.?\s+[A-Za-z][A-Za-z .&'()\-]{1,80}?)(?=\s+(?:LIVE|\d+(?:st|nd|rd|th)\s+Match)|\s*[|,]|$)/i);
+      if (m) name = m[1].trim();
+    }
+
+    const combined = name + " " + surrounding;
+    if (!name || finishedState(combined) || !liveState(combined)) continue;
+
+    const teams = splitTeams(name);
+    matches.set(id, {
+      id,
+      name: name.replace(/\s+LIVE\s*$/i, "").trim(),
+      teams,
+      teamInfo: teams.map((name: string) => ({ name })),
+      score: scoreList({ score: surrounding }, teams),
+      status: "Live",
+      matchStarted: true,
+      matchEnded: false,
+      source: "cricbuzz-html-fallback",
+    });
+  }
+
+  return [...matches.values()];
+}
+
+async function getHtml(url: string) {
+  const r = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      ...HEADERS,
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    },
+  });
+  const html = await r.text();
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return html;
+}
+
 async function getJson(url: string) {
   const r = await fetch(url, { cache: "no-store", headers: HEADERS });
   const body = await r.text();
@@ -213,6 +275,24 @@ export async function GET() {
       }
     } catch (e) {
       debug.push({ source: "cricbuzz-live-" + type, ok: false, error: e instanceof Error ? e.message : "fetch failed" });
+    }
+  }
+
+  for (const url of [
+    "https://www.cricbuzz.com/cricket-match/live-scores",
+    "https://www.cricbuzz.com/",
+  ]) {
+    try {
+      const html = await getHtml(url);
+      const matches = parseHtmlLive(html);
+      debug.push({ source: "cricbuzz-html", ok: true, count: matches.length });
+      if (matches.length) {
+        return NextResponse.json({ ok: true, data: matches, debug, fetchedAt: new Date().toISOString() }, {
+          headers: { "Cache-Control": "no-store, max-age=0" },
+        });
+      }
+    } catch (e) {
+      debug.push({ source: "cricbuzz-html", ok: false, error: e instanceof Error ? e.message : "fetch failed" });
     }
   }
 
