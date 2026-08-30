@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// Keep this route server-rendered; upstream sources can change between requests.
 
 type Score = { inning: string; r: number | null; w: number | null; o: string };
 type Match = {
