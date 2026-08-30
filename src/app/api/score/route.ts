@@ -12,15 +12,25 @@ const HEADERS = {
 };
 
 function decodeRsc(value:string) {
-  // Decode exactly one RSC escape layer. The old JSON-wrapper approach could
-  // double-escape existing \\" sequences and silently corrupt the payload.
-  return value
-    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/\\n/g, "\n")
-    .replace(/\\r/g, "\r")
-    .replace(/\\t/g, "\t")
-    .replace(/\\\"/g, '"')
-    .replace(/\\\\/g, "\\");
+  // Equivalent to Python's .decode("unicode_escape") for the RSC string.
+  let out = "";
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i];
+    if (ch !== "\\" || i + 1 >= value.length) { out += ch; continue; }
+    const n = value[++i];
+    if (n === "n") out += "\n";
+    else if (n === "r") out += "\r";
+    else if (n === "t") out += "\t";
+    else if (n === "b") out += "\b";
+    else if (n === "f") out += "\f";
+    else if (n === "v") out += "\v";
+    else if (n === "u" && /^[0-9a-fA-F]{4}$/.test(value.slice(i + 1, i + 5))) {
+      out += String.fromCharCode(parseInt(value.slice(i + 1, i + 5), 16)); i += 4;
+    } else if (n === "x" && /^[0-9a-fA-F]{2}$/.test(value.slice(i + 1, i + 3))) {
+      out += String.fromCharCode(parseInt(value.slice(i + 1, i + 3), 16)); i += 2;
+    } else out += n;
+  }
+  return out;
 }
 
 function balancedObject(text:string, start:number) {
@@ -70,6 +80,88 @@ function extractNextScorecard(html:string) {
   } catch {
     return null;
   }
+}
+
+
+// Strategy independent of Next.js/RSC: Cricbuzz's server-rendered mobile
+// scorecard. The page is deliberately converted to line-oriented text and
+// parsed by scorecard headings, so a React payload change cannot break it.
+function decodeHtml(s:string) {
+  return s
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+function htmlLines(html:string) {
+  return decodeHtml(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<(?:br|\/p|\/div|\/span|\/li|\/tr|\/td|\/th|h[1-6])\b[^>]*>/gi, "\n")
+      .replace(/<[^>]+>/g, "\n")
+  ).split(/\r?\n/).map(x=>x.replace(/\s+/g," ").trim()).filter(Boolean);
+}
+function isInningsHeader(line:string) {
+  return /\b(?:1st|2nd|3rd|4th)\s+Innings$/i.test(line);
+}
+function parseMobileScorecard(html:string,id:string) {
+  const lines=htmlLines(html);
+  const innings:any[]=[];
+  for(let i=0;i<lines.length;i++){
+    if(!isInningsHeader(lines[i])) continue;
+    const inning=lines[i];
+    let j=i+1, end=lines.length;
+    for(let k=j;k<lines.length;k++){
+      if(k>j&&isInningsHeader(lines[k])) {end=k;break;}
+      if(/^INFO$/i.test(lines[k])) {end=k;break;}
+    }
+    const block=lines.slice(j,end);
+    const scoreLine=block.find(x=>/^\d+\s*-\s*\d+\s*\([\d.]+\s*Ov/i.test(x));
+    const sm=scoreLine?.match(/^(\d+)\s*-\s*(\d+)\s*\(([\d.]+)\s*Ov/i);
+    const batting:any[]=[]; const bowling:any[]=[];
+    const batterAt=block.findIndex(x=>/^Batter$/i.test(x));
+    const extrasAt=block.findIndex(x=>/^Extras$/i.test(x));
+    const totalAt=block.findIndex(x=>/^Total$/i.test(x));
+    const bowlerAt=block.findIndex(x=>/^Bowler$/i.test(x));
+    if(batterAt>=0){
+      const stop=[extrasAt,totalAt,bowlerAt,block.length].filter(x=>x>batterAt).sort((a,b)=>a-b)[0];
+      let p=batterAt+1;
+      while(p<stop && /^(R|B|4s|6s|SR)$/i.test(block[p])) p++;
+      while(p+6<stop){
+        const name=block[p], dismissal=block[p+1];
+        const vals=block.slice(p+2,p+7);
+        if(vals.length===5 && vals.every(v=>/^(\d+(?:\.\d+)?|DNB|—|-)$/.test(v))){
+          batting.push({batsman:name,dismissal,runs:vals[0],balls:vals[1],fours:vals[2],sixes:vals[3],strikeRate:vals[4]}); p+=7;
+        } else p++;
+      }
+    }
+    if(bowlerAt>=0){
+      const stop=block.findIndex((x,idx)=>idx>bowlerAt&&/^(Fall of Wickets|Partnerships|Yet to Bat|Extras|Total)$/i.test(x));
+      const limit=stop>=0?stop:block.length;
+      let p=bowlerAt+1;
+      while(p<limit && /^(O|M|R|W|ECO)$/i.test(block[p])) p++;
+      while(p+5<limit){
+        const name=block[p], vals=block.slice(p+1,p+6);
+        if(vals.length===5 && vals.every(v=>/^(\d+(?:\.\d+)?|—|-)$/.test(v))){
+          bowling.push({bowler:name,overs:vals[0],maidens:vals[1],runs:vals[2],wickets:vals[3],noBalls:"",wides:"",economy:vals[4]}); p+=6;
+        } else p++;
+      }
+    }
+    const extrasText=extrasAt>=0?block[extrasAt+1]:"";
+    if(batting.length||bowling.length||sm) innings.push({
+      inning,battngParsed:true,batting,bowling,
+      extras:{runs:(extrasText.match(/^(\d+)/)||[])[1]||""},
+      total:{runs:sm?.[1]??"",wickets:sm?.[2]??"",overs:sm?.[3]??""}
+    });
+    i=end-1;
+  }
+  if(!innings.length) return null;
+  const title=lines.find(x=>/Scorecard.*(?:vs|v)/i.test(x))||"Detailed Scorecard";
+  const status=lines.find(x=>/^(Day|Session|Lunch|Tea|Stumps|Rain|Innings Break)/i.test(x))||"";
+  return {status:"success",id,name:title.replace(/\s+-\s+Scorecard.*$/i,"").trim(),matchStatus:status||"Live",scorecard:innings,playingEleven:{},source:"cricbuzz-mobile-html"};
 }
 
 function normalize(data:any, id:string, source:string) {
@@ -221,6 +313,19 @@ export async function GET(req:NextRequest) {
   if (!/^\d+$/.test(id)) return NextResponse.json({ status:"error", message:"Invalid match id" }, { status:400 });
 
   const debug:string[] = [];
+
+  // Strategy 0: server-rendered mobile scorecard (most stable HTML surface).
+  try {
+    const r = await fetchText("https://m.cricbuzz.com/live-cricket-scorecard/" + id);
+    debug.push("MOBILE HTTP " + r.status + " bytes=" + r.text.length);
+    if (r.ok) {
+      const parsed = parseMobileScorecard(r.text,id);
+      if (parsed?.scorecard?.length) return NextResponse.json(parsed,{headers:{ "Cache-Control":"no-store, max-age=0" }});
+      debug.push("MOBILE page fetched but no innings parsed");
+    }
+  } catch (e) {
+    debug.push("MOBILE failed: " + (e instanceof Error ? e.message : "unknown"));
+  }
 
   // Strategy 1: scrape Cricbuzz's current Next.js RSC payload.
   for (const host of ["https://www.cricbuzz.com", "https://mlb.cricbuzz.com"]) {
