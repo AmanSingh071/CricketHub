@@ -1,124 +1,32 @@
-import re
-from typing import Any
-import httpx
+import re,requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, Query
+from fastapi import FastAPI,Query
 from fastapi.responses import JSONResponse
-
-app = FastAPI(title="CricketHub Cricbuzz Scorecard", docs_url=None, redoc_url=None)
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    "Accept-Language": "en-US,en;q=0.9",
-}
-
-def clean(value: Any) -> str:
-    return " ".join(str(value or "").split())
-
-def num(value: str):
-    value = clean(value)
-    try:
-        return int(value)
-    except Exception:
-        try:
-            return float(value)
-        except Exception:
-            return value or "—"
-
-def parse_scorecard(soup: BeautifulSoup, match_id: str):
-    title_node = soup.select_one("h1.cb-nav-hdr") or soup.find("h1")
-    title = clean(title_node.get_text(" ", strip=True) if title_node else "")
-    if not title:
-        title_tag = soup.title
-        title = clean(title_tag.get_text(" ", strip=True) if title_tag else "Live Match")
-
-    status_node = soup.select_one(".cb-text-live, .cb-text-complete, .cb-text-preview")
-    status = clean(status_node.get_text(" ", strip=True) if status_node else "Live")
-
-    teams = []
-    m = re.search(r"(.+?)\s+vs\.?\s+(.+?)(?:\s*,|\s*\||$)", title, re.I)
-    if m:
-        teams = [clean(m.group(1)), clean(m.group(2))]
-
-    innings = []
-    # Each Cricbuzz scorecard header is followed by scorecard rows.
-    headers = soup.select(".cb-scrd-hdr-rw")
-    for header in headers:
-        header_text = clean(header.get_text(" ", strip=True))
-        section = header.parent
-        rows = []
-        if section:
-            rows = section.select(".cb-scrd-itms")
-
-        batting = []
-        bowling = []
-        mode = "batting"
-        for row in rows:
-            row_text = clean(row.get_text(" ", strip=True))
-            if not row_text:
-                continue
-            low = row_text.lower()
-            if "bowler" in low and ("overs" in low or "wkts" in low):
-                mode = "bowling"
-                continue
-            if "batter" in low or ("runs" in low and "balls" in low and "sr" in low):
-                mode = "batting"
-                continue
-
-            cols = [clean(x.get_text(" ", strip=True)) for x in row.select(":scope > .cb-col")]
-            if len(cols) < 2:
-                continue
-            link = row.find("a")
-            name = clean(link.get_text(" ", strip=True) if link else cols[0])
-            if not name or name.lower() in ("extras", "total"):
-                continue
-
-            if mode == "bowling":
-                if len(cols) >= 6:
-                    bowling.append({
-                        "bowler": name,
-                        "overs": num(cols[1]),
-                        "maidens": num(cols[2]),
-                        "runs": num(cols[3]),
-                        "wickets": num(cols[4]),
-                        "economy": num(cols[5]),
-                    })
-            else:
-                if len(cols) >= 6:
-                    dismissal = cols[0]
-                    batting.append({
-                        "batsman": name,
-                        "dismissal": dismissal,
-                        "runs": num(cols[-5]),
-                        "balls": num(cols[-4]),
-                        "fours": num(cols[-3]),
-                        "sixes": num(cols[-2]),
-                        "strikeRate": num(cols[-1]),
-                    })
-
-        if batting or bowling:
-            innings.append({"inning": header_text or "Innings", "batting": batting, "bowling": bowling})
-
-    return {
-        "status": "success",
-        "id": match_id,
-        "name": title,
-        "matchStatus": status,
-        "teams": teams,
-        "scorecard": innings,
-        "rawSource": "cricbuzz-live-scraper",
-    }
-
+app=FastAPI(title="CricketHub Scorecard",docs_url=None,redoc_url=None)
+H={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36","Accept-Language":"en-US,en;q=0.9"}
+def clean(v):return " ".join(str(v or "").split())
+def n(v):
+ v=clean(v)
+ if v.isdigit():return int(v)
+ try:return float(v)
+ except:return v or "—"
 @app.get("/")
-async def root(score: str = Query(..., min_length=4, max_length=30)):
-    if not score.isdigit():
-        return JSONResponse({"status": "error", "message": "invalid Cricbuzz match id"}, status_code=422)
-    url = "https://www.cricbuzz.com/live-cricket-scorecard/" + score
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers=HEADERS) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-        soup = BeautifulSoup(response.text, "lxml")
-        data = parse_scorecard(soup, score)
-        return JSONResponse(data)
-    except Exception:
-        return JSONResponse({"status": "error", "message": "scorecard temporarily unavailable"}, status_code=200)
+async def root(score:str=Query(...,min_length=4,max_length=20)):
+ if not score.isdigit():return JSONResponse({"status":"error","message":"invalid match id"},status_code=422)
+ try:
+  r=requests.get("https://www.cricbuzz.com/live-cricket-scorecard/"+score,headers=H,timeout=15);r.raise_for_status();soup=BeautifulSoup(r.content,"lxml")
+  h=soup.find("h1",class_="cb-nav-hdr") or soup.find("h1");name=clean(h.get_text(" ",strip=True) if h else soup.title.get_text(" ",strip=True))
+  st=soup.find("div",class_="cb-text-live") or soup.find("div",class_="cb-text-complete") or soup.find("div",class_="cb-text-preview");status=clean(st.get_text(" ",strip=True) if st else "Live")
+  teams=[];m=re.search(r"(.+?)\s+vs\.?\s+(.+?)(?:\s*,|$)",name,re.I)
+  if m:teams=[clean(m.group(1)),clean(m.group(2))]
+  bat=[];bowl=[]
+  for row in soup.find_all("div",class_="cb-scrd-itms"):
+   c=row.find_all("div",class_=lambda z:z and "cb-col" in z)
+   if len(c)<6:continue
+   p=c[0].find("a",href=lambda z:z and "/profiles/" in z)
+   if not p:continue
+   v=[clean(z.get_text(" ",strip=True)) for z in c];player=clean(p.get_text(" ",strip=True))
+   if re.fullmatch(r"\d+(?:\.\d+)?",v[1] or ""):bowl.append({"bowler":player,"overs":n(v[1]),"maidens":n(v[2]),"runs":n(v[3]),"wickets":n(v[4]),"economy":n(v[5])})
+   elif v[1].isdigit() or v[2].isdigit():bat.append({"batsman":player.replace(" *","").replace("†",""),"dismissal":"","runs":n(v[1]),"balls":n(v[2]),"fours":n(v[3]),"sixes":n(v[4]),"strikeRate":n(v[5])})
+  return {"status":"success","id":score,"name":name,"matchStatus":status,"teams":teams,"scorecard":[{"inning":name,"batting":bat,"bowling":bowl}],"rawSource":"cricketHub-cricbuzz-scraper"}
+ except Exception:return JSONResponse({"status":"error","message":"scorecard temporarily unavailable"},status_code=200)
