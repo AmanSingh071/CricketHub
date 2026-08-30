@@ -69,7 +69,10 @@ function extractScorecardApiData(html:string){
 }
 
 function normalize(data:any,id:string){
-  const cards=Array.isArray(data?.scoreCard)?data.scoreCard:[];
+  // extractScorecardApiData can return either the full Cricbuzz object or
+  // the scoreCard array itself. The previous implementation only accepted
+  // the object shape, so a successfully scraped array was discarded.
+  const cards=Array.isArray(data)?data:Array.isArray(data?.scoreCard)?data.scoreCard:[];
   const innings=cards.map((sc:any,index:number)=>{
     const score=sc?.scoreDetails||{};
     const bat=sc?.batTeamDetails||{};
