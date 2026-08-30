@@ -6,8 +6,19 @@ export const revalidate = 1800;
 export default async function Home() {
   let all:any[] = [];
   try { all = await getCurrentMatches(); } catch { all = []; }
-  const { live, upcoming, recent } = classify(all);
-  const featured = live[0] || upcoming[0] || recent[0];
+  const { live: rawLive, upcoming, recent } = classify(all);
+
+// The provider can return the same live match more than once. Keep one card
+// per unique match ID/name before rendering.
+const seen = new Set<string>();
+const live = rawLive.filter((match:any) => {
+  const key = String(match.id || match.name || "").trim().toLowerCase();
+  if (!key || seen.has(key)) return false;
+  seen.add(key);
+  return true;
+});
+
+const featured = live[0] || upcoming[0] || recent[0];
 
   return <main className="min-h-screen">
     <header className="border-b border-[#20364d] bg-[#07111f]">
@@ -59,7 +70,7 @@ export default async function Home() {
         </div>
 
         {live.length ? <div className="mt-6 grid gap-5 lg:grid-cols-2">
-          {live.map((match:any) => <MatchCard key={match.id} match={match} />)}
+          {live.map((match:any, index:number) => <MatchCard key={String(match.id || match.name || index)} match={match} />)}
         </div> : <div className="card mt-6 rounded-2xl p-6">
           <p className="font-bold">No live matches right now</p>
           <p className="mt-2 text-sm text-slate-400">Check upcoming fixtures or refresh later.</p>
