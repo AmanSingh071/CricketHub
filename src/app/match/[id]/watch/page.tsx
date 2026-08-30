@@ -3,15 +3,15 @@ import { getMatch, scoreText } from "@/lib/cricket";
 export const revalidate = 3600;
 
 const channels = [
-  { channel_name: "Willow Cricket", url: "" },
-  { channel_name: "Willow 2 Cricket", url: "" },
-  { channel_name: "SONY TEN 1", url: "" },
-  { channel_name: "SONY TEN 2", url: "" },
-  { channel_name: "SONY TEN 3", url: "" },
-  { channel_name: "Star Sports 1 IN", url: "" },
-  { channel_name: "Star Sports Hindi IN", url: "" },
-  { channel_name: "Sky Sports Cricket", url: "" },
-  { channel_name: "Sky Sports Cricket UK", url: "" },
+  { channel_name: "Willow Cricket", url: "https://daddylive.app/player/embed.php?id=346" },
+  { channel_name: "Willow 2 Cricket", url: "https://daddylive.app/player/embed.php?id=598" },
+  { channel_name: "SONY TEN 1", url: "https://daddylive.app/player/embed.php?id=885" },
+  { channel_name: "SONY TEN 2", url: "https://daddylive.app/player/embed.php?id=886" },
+  { channel_name: "SONY TEN 3", url: "https://daddylive.app/player/embed.php?id=887" },
+  { channel_name: "Star Sports 1 IN", url: "https://daddylive.app/player/embed.php?id=267" },
+  { channel_name: "Star Sports Hindi IN", url: "https://daddylive.app/player/embed.php?id=268" },
+  { channel_name: "Sky Sports Cricket", url: "https://daddylive.app/player/embed.php?id=65" },
+  { channel_name: "Sky Sports Cricket UK", url: "https://daddylive.app/player/embed.php?id=stream-65" },
 ];
 
 export default async function MatchPage({
