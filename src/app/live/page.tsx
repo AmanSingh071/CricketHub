@@ -1,0 +1,6 @@
+import { getCurrentMatches, scoreText } from "@/lib/cricket";
+export const revalidate=60;
+export default async function LivePage(){
+ const matches=(await getCurrentMatches()).filter(m=>m.matchStarted&&!m.matchEnded);
+ return <main className="mx-auto min-h-screen max-w-6xl px-4 py-8"><a href="/" className="text-green-400">← CricketHub</a><p className="mt-8 text-xs font-black tracking-[.2em] text-red-400">🔴 LIVE CRICKET</p><h1 className="mt-2 text-4xl font-black">Live Matches</h1><p className="mt-2 text-slate-400">Real-time match data refreshed through the server cache.</p><div className="mt-8 grid gap-4 md:grid-cols-2">{matches.length?matches.map(m=><a key={m.id} href={"/match/"+m.id} className="card rounded-2xl p-5 hover:border-green-500/50"><div className="flex justify-between"><span className="font-bold text-red-400">🔴 LIVE</span><span className="text-sm text-slate-500">{m.matchType}</span></div><h2 className="mt-4 text-lg font-bold">{m.name}</h2><p className="mt-4 text-green-300">{scoreText(m.score)}</p><p className="mt-3 text-sm text-slate-400">{m.status}</p><div className="mt-5 text-sm font-bold text-green-400">Open Match Center →</div></a>):<div className="card rounded-2xl p-6 text-slate-400">No live matches are currently returned by the provider.</div>}</div></main>
+}
