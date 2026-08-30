@@ -96,9 +96,35 @@ function decodeHtml(s:string) {
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">");
 }
+function profileLabel(anchor:string) {
+  const title = anchor.match(/\btitle=["']([^"']+)["']/i)?.[1]
+    || anchor.match(/\baria-label=["']([^"']+)["']/i)?.[1];
+  if (title && !/^view profile$/i.test(title.trim())) return title.trim();
+
+  const href = anchor.match(/\bhref=["']([^"']+)["']/i)?.[1] || "";
+  const parts = href.split(/[/?#]/).filter(Boolean);
+  const slug = [...parts].reverse().find(part => /^[a-z][a-z0-9-]{2,}$/i.test(part) && !/^(profile|profiles|player)$/i.test(part));
+  if (!slug) return "";
+  return slug
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
 function htmlLines(html:string) {
+  // Cricbuzz mobile pages often render the visible player link text as
+  // "View profile". Preserve the actual player name from the anchor metadata
+  // before stripping markup.
+  const withNames = html.replace(
+    /<a\b[^>]*\b(?:href|title|aria-label)=["'][^"']*(?:profile|profiles)[^"']*["'][^>]*>[\s\S]*?<\/a>/gi,
+    (anchor) => {
+      const label = profileLabel(anchor);
+      const visible = anchor.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      return label || visible;
+    }
+  );
+
   return decodeHtml(
-    html
+    withNames
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
       .replace(/<(?:br|\/p|\/div|\/span|\/li|\/tr|\/td|\/th|h[1-6])\b[^>]*>/gi, "\n")
