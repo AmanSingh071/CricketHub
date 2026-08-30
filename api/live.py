@@ -27,13 +27,13 @@ def team_names(name: str):
 
 def parse_score(text: str):
     scores = []
-    for runs, wickets, overs in re.findall(r"([A-Z][A-Z0-9]{1,7})\s+(\d+)(?:-(\d+))?\s*\((\d+(?:\.\d+)?)\)", text):
-        scores.append({"inning": runs, "r": int(wickets), "w": 0, "o": overs})
-    # More common compact score: TEAM 123-4 (15.2)
-    scores = []
-    for team, runs, wickets, overs in re.findall(r"\b([A-Z][A-Z0-9]{1,7})\s+(\d+)(?:-(\d+))?\s*\((\d+(?:\.\d+)?)\)", text):
-        scores.append({"inning": team, "r": int(runs), "w": int(wickets or 0), "o": overs})
+    # Compact score examples: IND 123-4 (15.2), IND 123/4 (15.2)
+    for team, runs, sep, wickets, overs in re.findall(
+        r"\\b([A-Z][A-Z0-9]{1,10})\\s+(\\d+)([-/])(\\d+)\\s*\\((\\d+(?:\\.\\d+)?)\\)", text
+    ):
+        scores.append({"inning": team, "r": int(runs), "w": int(wickets), "o": overs})
     return scores
+
 
 @app.get("/")
 async def root():
