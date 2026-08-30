@@ -1,54 +1,79 @@
-# Self-hosted score endpoint adapted from the MIT-licensed
-# mskian/live-cricket-score-api project, with simplified output for CricketHub.
-
-import html, re, time
+from typing import Any
 import httpx
-from bs4 import BeautifulSoup
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
 app = FastAPI(title="CricketHub Score Feed", docs_url=None, redoc_url=None)
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CricketHub/1.0)", "Referer": "https://www.cricbuzz.com/"}
 
-def clean(text):
-    return html.escape(" ".join((text or "").split()))
+def clean(v: Any) -> str:
+    return " ".join(str(v or "").split())
+
+def event_parts(score: str):
+    if ":" not in score:
+        return None, None
+    league, event = score.split(":", 1)
+    return league.strip(), event.strip()
+
+def scorecard_from_summary(data: dict, match_id: str):
+    header = data.get("header") or {}
+    competition = (header.get("competitions") or [{}])[0]
+    competitors = competition.get("competitors") or []
+    teams = []
+    for c in competitors:
+        team = c.get("team") or {}
+        teams.append(clean(team.get("displayName") or team.get("shortDisplayName") or team.get("name")))
+
+    cards = data.get("matchcards") or []
+    innings = []
+    for card in cards:
+        batting, bowling = [], []
+        title = clean(card.get("title") or card.get("name") or card.get("inning") or "Innings")
+        for p in card.get("batsmen") or card.get("batting") or []:
+            athlete = p.get("athlete") or p.get("player") or {}
+            stats = p.get("stats") or p
+            batting.append({
+                "batsman": clean(athlete.get("displayName") or athlete.get("name") or p.get("name")),
+                "runs": stats.get("runs", stats.get("r", "—")),
+                "balls": stats.get("balls", stats.get("b", "—")),
+                "fours": stats.get("fours", stats.get("4s", "—")),
+                "sixes": stats.get("sixes", stats.get("6s", "—")),
+                "dismissal": clean(stats.get("dismissalText") or stats.get("dismissal") or ""),
+            })
+        for p in card.get("bowlers") or card.get("bowling") or []:
+            athlete = p.get("athlete") or p.get("player") or {}
+            stats = p.get("stats") or p
+            bowling.append({
+                "bowler": clean(athlete.get("displayName") or athlete.get("name") or p.get("name")),
+                "overs": stats.get("overs", stats.get("o", "—")),
+                "maidens": stats.get("maidens", stats.get("m", "—")),
+                "runs": stats.get("runsConceded", stats.get("runs", stats.get("r", "—"))),
+                "wickets": stats.get("wickets", stats.get("w", "—")),
+                "economy": stats.get("economy", stats.get("econ", "—")),
+            })
+        if batting or bowling or title:
+            innings.append({"inning": title, "batting": batting, "bowling": bowling})
+
+    status = clean((((competition.get("status") or {}).get("type") or {}).get("detail")) or "Live"
+    return {
+        "id": match_id,
+        "name": clean(header.get("shortName") or header.get("name") or " vs ".join(teams) or "Live Match"),
+        "status": status,
+        "teams": teams,
+        "scorecard": innings,
+        "rawSource": "espn-public-feed",
+    }
 
 @app.get("/")
-async def root(score: str = Query(..., min_length=4, max_length=20)):
-    if not score.isdigit():
+async def root(score: str = Query(..., min_length=3, max_length=80)):
+    league, event = event_parts(score)
+    if not league or not event:
         return JSONResponse({"status": "error", "message": "invalid match id"}, status_code=422)
+    url = f"https://site.web.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={event}&lang=en&region=in"
     try:
-        url = "https://www.cricbuzz.com/live-cricket-scores/" + score + "?_=" + str(time.time_ns())
-        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
-            response = await client.get(url, headers=HEADERS)
-            response.raise_for_status()
-        soup = BeautifulSoup(response.text, "lxml")
-        title = clean(re.sub(r"^Cricket commentary\s*\|\s*", "", soup.title.get_text(" ", strip=True) if soup.title else "Live Cricket"))
-        og = soup.find("meta", property="og:title")
-        og_title = clean(og.get("content", "") if og else "")
-        score_text = "Score not available"
-        found = re.search(r"([A-Z]{2,8})\s+(\d+)/(\d+)\s*\(([\d.]+)\)", og_title)
-        if found:
-            team, runs, wickets, overs = found.groups()
-            score_text = f"{team} {runs}/{wickets} ({overs})"
-
-        batsmen = []
-        bracket = re.search(r"\((.*?)\)\s*\|", og_title)
-        if bracket:
-            for name, value in re.findall(r"([A-Za-z\s.'-]+)\s+(\d+\(\d+\))", bracket.group(1))[:2]:
-                batsmen.append({"name": clean(name), "score": clean(value)})
-        while len(batsmen) < 2:
-            batsmen.append({"name": "Not available", "score": "—"})
-
-        page = clean(soup.get_text(" ", strip=True))
-        bowler = re.search(r"Bowler.*?([A-Za-z.'\- ]+?)\s+\d+\s+\d+", page, re.I)
-        return {
-            "status": "success",
-            "title": title,
-            "score": score_text,
-            "current_batsmen": batsmen,
-            "current_bowler": {"name": clean(bowler.group(1)) if bowler else "Not available"},
-            "source": "self-hosted-scraper",
-        }
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (CricketHub)"}) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            data = r.json()
+        return {"status": "success", **scorecard_from_summary(data, score)}
     except Exception:
-        return JSONResponse({"status": "error", "message": "score temporarily unavailable"}, status_code=200)
+        return JSONResponse({"status": "error", "message": "live score temporarily unavailable"}, status_code=200)
