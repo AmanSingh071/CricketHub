@@ -57,7 +57,7 @@ def scorecard_from_summary(data: dict, match_id: str):
     return {
         "id": match_id,
         "name": clean(header.get("shortName") or header.get("name") or " vs ".join(teams) or "Live Match"),
-        "status": status,
+        "matchStatus": status,
         "teams": teams,
         "scorecard": innings,
         "rawSource": "espn-public-feed",
