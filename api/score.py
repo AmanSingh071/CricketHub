@@ -53,7 +53,7 @@ def scorecard_from_summary(data: dict, match_id: str):
         if batting or bowling or title:
             innings.append({"inning": title, "batting": batting, "bowling": bowling})
 
-    status = clean((((competition.get("status") or {}).get("type") or {}).get("detail")) or "Live"
+    status = clean((((competition.get("status") or {}).get("type") or {}).get("detail")) or "Live")
     return {
         "id": match_id,
         "name": clean(header.get("shortName") or header.get("name") or " vs ".join(teams) or "Live Match"),
