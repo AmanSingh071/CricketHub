@@ -5,7 +5,8 @@ const SELF_HOSTED_BASE=(process.env.CRICKET_SCRAPER_URL||process.env.NEXT_PUBLIC
 
 function ownBase(){
   if(SELF_HOSTED_BASE)return SELF_HOSTED_BASE;
-  if(process.env.VERCEL_URL)return "https://"+process.env.VERCEL_URL;
+  const host=process.env.VERCEL_PROJECT_PRODUCTION_URL||process.env.VERCEL_BRANCH_URL||process.env.VERCEL_URL;
+  if(host)return "https://"+host.replace(/^https?:\/\//,"");
   return null;
 }
 
