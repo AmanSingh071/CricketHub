@@ -103,6 +103,7 @@ export default async function Home() {
                   <div>
                     <p className="text-xs font-black tracking-[.18em] text-red-400">🔴 LIVE ON {channel.channel_name.toUpperCase()}</p>
                     <h3 className="mt-3 text-2xl font-black">{channel.nowPlaying}</h3>
+                    {match && <a href={"/match/" + match.id + "/scorecard"} className="mt-3 inline-block text-sm font-black text-green-400 hover:text-green-300">Open detailed live scorecard →</a>}
                   </div>
                   <a href={"/channels/" + channel.id} className="rounded-xl bg-green-500 px-4 py-2 text-sm font-black text-slate-950">Watch</a>
                 </div>
@@ -140,24 +141,6 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="mt-12">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-xs font-black tracking-[.2em] text-green-400">ALL CHANNELS</p>
-              <h2 className="mt-2 text-3xl font-black">More ways to watch</h2>
-            </div>
-            <a href="/channels" className="text-sm font-bold text-green-400">Open directory →</a>
-          </div>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {channels.filter((c) => !c.nowPlaying).map((channel) => (
-              <a key={channel.id} href={"/channels/" + channel.id} className="card rounded-2xl p-5 hover:border-green-400/60">
-                <div className="flex items-center justify-between"><span className="text-3xl">📺</span><span className="text-xs font-bold text-green-400">{channel.url ? "READY" : "SETUP"}</span></div>
-                <h3 className="mt-4 font-black">{channel.channel_name}</h3>
-                <p className="mt-2 text-xs text-slate-400">Open channel player</p>
-              </a>
-            ))}
-          </div>
-        </section>
       </div>
     </main>
   );
