@@ -1,91 +1,119 @@
-# Self-hosted live cricket discovery endpoint.
-# Inspired by the MIT-licensed mskian/live-cricket-score-api project.
-# This endpoint reads publicly available score pages; it is not an official provider API.
-
-import re, time
+import asyncio
+import time
 from typing import Any
 import httpx
-from bs4 import BeautifulSoup
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 app = FastAPI(title="CricketHub Live Feed", docs_url=None, redoc_url=None)
 
-CACHE: dict[str, Any] = {"at": 0.0, "data": []}
-TTL = 60
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; CricketHub/1.0)",
-    "Accept-Language": "en-US,en;q=0.9",
-}
+CACHE: dict[str, Any] = {"at": 0.0, "data": [], "error": None}
+TTL = 30
+HEADER_URL = "https://site.api.espn.com/apis/personalized/v2/scoreboard/header?sport=cricket&region=in&tz=Asia/Calcutta"
+SCOREBOARD = "https://site.api.espn.com/apis/site/v2/sports/cricket/{league}/scoreboard"
 
-def clean(value: str) -> str:
-    return " ".join((value or "").split())
+def clean(v: Any) -> str:
+    return " ".join(str(v or "").split())
 
-def team_names(name: str):
-    parts = re.split(r"\s+vs\.?\s+", name, flags=re.I)
-    return [clean(x) for x in parts[:2]] if len(parts) >= 2 else []
+def status_text(event: dict) -> str:
+    competition = (event.get("competitions") or [{}])[0]
+    status = competition.get("status") or event.get("status") or {}
+    return clean(status.get("type", {}).get("detail") or status.get("type", {}).get("shortDetail") or status.get("displayClock") or "Live")
 
-def parse_score(text: str):
-    scores = []
-    # Compact score examples: IND 123-4 (15.2), IND 123/4 (15.2)
-    for team, runs, sep, wickets, overs in re.findall(
-        r"\\b([A-Z][A-Z0-9]{1,10})\\s+(\\d+)([-/])(\\d+)\\s*\\((\\d+(?:\\.\\d+)?)\\)", text
-    ):
-        scores.append({"inning": team, "r": int(runs), "w": int(wickets), "o": overs})
-    return scores
+def normalize_event(event: dict, league_id: str, league_name: str):
+    competition = (event.get("competitions") or [{}])[0]
+    status = competition.get("status") or event.get("status") or {}
+    competitors = competition.get("competitors") or event.get("competitors") or []
+    teams, team_info, score = [], [], []
+    for c in competitors:
+        team = c.get("team") or {}
+        name = clean(team.get("displayName") or team.get("shortDisplayName") or team.get("name"))
+        if name:
+            teams.append(name)
+            team_info.append({"name": name, "shortname": clean(team.get("abbreviation")), "img": team.get("logo")})
+        lines = c.get("linescores") or []
+        if lines:
+            ls = lines[-1] or {}
+            score.append({
+                "inning": clean(team.get("abbreviation") or name),
+                "r": ls.get("runs", c.get("score")),
+                "w": ls.get("wickets"),
+                "o": ls.get("overs"),
+            })
+        elif c.get("score") not in (None, ""):
+            score.append({"inning": clean(team.get("abbreviation") or name), "r": c.get("score")})
+    state = clean((status.get("type") or {}).get("state")).lower()
+    completed = bool((status.get("type") or {}).get("completed")) or state in ("post", "final")
+    started = state in ("in", "live", "inprogress") or not completed
+    event_id = str(event.get("id"))
+    return {
+        "id": f"{league_id}:{event_id}",
+        "eventId": event_id,
+        "leagueId": str(league_id),
+        "name": clean(event.get("name") or event.get("shortName") or " vs ".join(teams)),
+        "teams": teams,
+        "teamInfo": team_info,
+        "score": score,
+        "status": status_text(event),
+        "date": event.get("date"),
+        "dateTimeGMT": event.get("date"),
+        "seriesName": league_name,
+        "matchStarted": started,
+        "matchEnded": completed,
+        "source": "espn-public-feed",
+    }
 
+async def fetch_json(client: httpx.AsyncClient, url: str):
+    r = await client.get(url)
+    r.raise_for_status()
+    return r.json()
+
+async def get_live_matches():
+    headers = {"User-Agent": "Mozilla/5.0 (CricketHub live data)", "Accept": "application/json"}
+    async with httpx.AsyncClient(timeout=12.0, follow_redirects=True, headers=headers) as client:
+        header = await fetch_json(client, HEADER_URL)
+        sports = header.get("sports") or []
+        leagues = []
+        for sport in sports:
+            leagues.extend(sport.get("leagues") or [])
+
+        async def fetch_league(league):
+            lid = str(league.get("id") or "")
+            if not lid:
+                return []
+            try:
+                data = await fetch_json(client, SCOREBOARD.format(league=lid))
+                return [(e, lid, clean(league.get("name"))) for e in (data.get("events") or [])]
+            except Exception:
+                # Header itself already contains event metadata on ESPN's cricket feed.
+                return [(e, lid, clean(league.get("name"))) for e in (league.get("events") or [])]
+
+        groups = await asyncio.gather(*(fetch_league(l) for l in leagues[:40]), return_exceptions=True)
+        matches = []
+        seen = set()
+        for group in groups:
+            if isinstance(group, Exception):
+                continue
+            for event, lid, lname in group:
+                item = normalize_event(event, lid, lname)
+                key = item["id"]
+                if key in seen:
+                    continue
+                seen.add(key)
+                if item["matchStarted"] and not item["matchEnded"]:
+                    matches.append(item)
+        return matches
 
 @app.get("/")
 async def root():
     now = time.time()
     if CACHE["data"] and now - CACHE["at"] < TTL:
-        return JSONResponse({"source": "self-hosted-scraper", "cached": True, "data": CACHE["data"]})
-
-    url = "https://m.cricbuzz.com/cricket-match/live-scores"
+        return JSONResponse({"source": "espn-public-feed", "cached": True, "data": CACHE["data"], "error": CACHE["error"]})
     try:
-        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
-            response = await client.get(url, headers=HEADERS)
-            response.raise_for_status()
-        soup = BeautifulSoup(response.text, "lxml")
-        cards = soup.select(".cb-lv-scrs-well")
-        if not cards:
-            cards = soup.select(".cb-lv-scrs-col")
-
-        seen = set()
-        matches = []
-        for card in cards:
-            link = card.find("a", href=re.compile(r"/live-cricket-scores/\d+"))
-            if not link:
-                continue
-            href = link.get("href", "")
-            match_id = re.search(r"/live-cricket-scores/(\d+)", href)
-            if not match_id or match_id.group(1) in seen:
-                continue
-            seen.add(match_id.group(1))
-            text = clean(card.get_text(" ", strip=True))
-            name = clean(link.get_text(" ", strip=True))
-            if not name or len(name) < 5:
-                slug = href.rstrip("/").split("/")[-1]
-                name = clean(re.sub(r"^\d+-", "", slug).replace("-", " "))
-            lower = text.lower()
-            ended_words = ("won by", "match drawn", "match abandoned", "no result", "stumps", "result")
-            match_ended = any(word in lower for word in ended_words)
-            # Cards on the live page are current matches; completed cards are marked ended.
-            teams = team_names(name)
-            matches.append({
-                "id": match_id.group(1),
-                "name": name,
-                "teams": teams,
-                "score": parse_score(text),
-                "status": text[-220:] if text else "Live score update available",
-                "matchStarted": True,
-                "matchEnded": match_ended,
-                "source": "self-hosted-scraper",
-                "url": "https://www.cricbuzz.com" + href,
-            })
-
-        CACHE["at"] = now
-        CACHE["data"] = matches
-        return JSONResponse({"source": "self-hosted-scraper", "cached": False, "data": matches})
+        data = await get_live_matches()
+        CACHE.update({"at": now, "data": data, "error": None})
+        return JSONResponse({"source": "espn-public-feed", "cached": False, "data": data})
     except Exception as exc:
-        return JSONResponse({"source": "self-hosted-scraper", "data": CACHE["data"], "error": "live feed temporarily unavailable"}, status_code=200)
+        CACHE["error"] = "upstream cricket feed temporarily unavailable"
+        CACHE["at"] = now
+        return JSONResponse({"source": "espn-public-feed", "cached": False, "data": CACHE["data"], "error": CACHE["error"]})
