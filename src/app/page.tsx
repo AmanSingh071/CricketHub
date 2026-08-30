@@ -1,4 +1,4 @@
-import { classify, getCurrentMatches, scoreText } from "@/lib/cricket";
+import LiveMatches from "@/components/LiveMatches";
 import { channels } from "@/lib/channels";
 
 export const dynamic = "force-dynamic";
@@ -20,14 +20,13 @@ function matchForChannel(channel:any, matches:MatchLike[]) {
 }
 
 export default async function Home() {
-  let matches:MatchLike[] = [];
-  try { matches = await getCurrentMatches(); } catch { matches = []; }
+  const matches:MatchLike[] = [];
 
   const channelMatches = channels
     .filter((channel) => channel.nowPlaying || channel.url)
     .map((channel) => ({ channel, match: matchForChannel(channel, matches) }));
 
-  const liveMatches = classify(matches).live;
+  const liveMatches:MatchLike[] = [];
 
   return (
     <main className="min-h-screen">
@@ -94,55 +93,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="mt-12">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-xs font-black tracking-[.2em] text-red-400">LIVE SCORECARD</p>
-              <h2 className="mt-2 text-3xl font-black">🔴 All live matches</h2>
-              <p className="mt-2 text-sm text-slate-400">Automatically populated from the live cricket feed, not limited to channels you manually configured.</p>
-            </div>
-            <a href="/live" className="text-sm font-bold text-green-400">View all →</a>
-          </div>
-
-          {liveMatches.length ? (
-            <div className="mt-6 grid gap-5 lg:grid-cols-2">
-              {liveMatches.map((match) => (
-                <a key={match.id} href={"/match/" + match.id + "/scorecard"} className="card block rounded-3xl p-6 transition hover:-translate-y-1 hover:border-green-400/60">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-black tracking-[.18em] text-red-400">🔴 LIVE NOW</p>
-                      <h3 className="mt-3 text-2xl font-black">{match.name}</h3>
-                    </div>
-                    <span className="rounded-xl bg-green-500 px-4 py-2 text-sm font-black text-slate-950">Scorecard</span>
-                  </div>
-
-                  <div className="mt-6 grid grid-cols-2 gap-4">
-                    {(match.teams || match.teamInfo?.map((team) => team.name || "") || []).slice(0, 2).map((team) => (
-                      <div key={team} className="rounded-2xl bg-white/[.04] p-5 text-center">
-                        <div className="text-3xl">🏏</div>
-                        <p className="mt-2 font-black">{team}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-5 rounded-2xl bg-green-500/5 p-5">
-                    <p className="text-xs font-bold tracking-wider text-green-400">CURRENT SCORE</p>
-                    <p className="mt-2 text-xl font-black text-green-300">{scoreText(match.score)}</p>
-                    {match.status && <p className="mt-2 text-sm text-slate-400">{match.status}</p>}
-                  </div>
-
-                  <p className="mt-5 text-sm font-black text-green-400">Open detailed player-by-player scorecard →</p>
-                </a>
-              ))}
-            </div>
-          ) : (
-            <div className="card mt-6 rounded-3xl p-7">
-              <p className="text-lg font-black">No live matches returned right now</p>
-              <p className="mt-2 text-sm text-slate-400">The live feed is checked directly from CricketHub’s self-hosted data source. Refresh the page to retry if the upstream score source is temporarily unavailable.</p>
-            </div>
-          )}
-        </section>
-
+        <LiveMatches />
       </div>
     </main>
   );
