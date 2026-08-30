@@ -102,8 +102,7 @@ export default async function Home() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-black tracking-[.18em] text-red-400">🔴 LIVE ON {channel.channel_name.toUpperCase()}</p>
-                    <h3 className="mt-3 text-2xl font-black">{channel.nowPlaying}</h3>
-                    {match && <a href={"/match/" + match.id + "/scorecard"} className="mt-3 inline-block text-sm font-black text-green-400 hover:text-green-300">Open detailed live scorecard →</a>}
+                    <a href={"/live-scorecard/" + channel.id} className="group mt-2 inline-block"><h3 className="text-2xl font-black group-hover:text-green-300">{channel.nowPlaying}</h3><span className="mt-3 inline-block text-sm font-black text-green-400">Open detailed live scorecard →</span></a>
                   </div>
                   <a href={"/channels/" + channel.id} className="rounded-xl bg-green-500 px-4 py-2 text-sm font-black text-slate-950">Watch</a>
                 </div>
@@ -129,12 +128,12 @@ export default async function Home() {
                     </div>
                   </>
                 ) : (
-                  <div className="mt-6 rounded-2xl bg-white/[.03] p-5">
+                  <a href={"/live-scorecard/" + channel.id} className="mt-6 block rounded-2xl bg-white/[.03] p-5 transition hover:bg-green-500/[.06]">
                     <div className="grid grid-cols-2 gap-4">
                       {(channel.teams || []).map((team:string) => <div key={team} className="rounded-2xl bg-white/[.04] p-5 text-center font-black">🏏<p className="mt-2">{team}</p></div>)}
                     </div>
-                    <p className="mt-5 text-sm text-slate-400">The channel is marked as showing this match. Live score data is not currently available from the cricket data feed.</p>
-                  </div>
+                    <p className="mt-5 text-sm text-slate-400">Open the scorecard to load the latest player-by-player data.</p><p className="mt-3 text-sm font-black text-green-400">Open detailed live scorecard →</p>
+                  </a>
                 )}
               </article>
             ))}
