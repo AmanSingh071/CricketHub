@@ -159,6 +159,18 @@ function parseMobileScorecard(html:string,id:string) {
     i=end-1;
   }
   if(!innings.length) return null;
+
+  // Cricbuzz mobile markup can expose accessibility text ("View profile")
+  // instead of player names. Do not return a visually broken scorecard when
+  // that happens; let the richer RSC strategy below provide the real names.
+  const parsedPlayers = innings.flatMap((inn:any) => [
+    ...(Array.isArray(inn.batting) ? inn.batting.map((p:any) => p.batsman) : []),
+    ...(Array.isArray(inn.bowling) ? inn.bowling.map((p:any) => p.bowler) : []),
+  ]).filter(Boolean);
+  if (parsedPlayers.length && parsedPlayers.every((name:any) => /^view profile$/i.test(String(name)))) {
+    return null;
+  }
+
   const title=lines.find(x=>/Scorecard.*(?:vs|v)/i.test(x))||"Detailed Scorecard";
   const status=lines.find(x=>/^(Day|Session|Lunch|Tea|Stumps|Rain|Innings Break)/i.test(x))||"";
   return {status:"success",id,name:title.replace(/\s+-\s+Scorecard.*$/i,"").trim(),matchStatus:status||"Live",scorecard:innings,playingEleven:{},source:"cricbuzz-mobile-html"};
