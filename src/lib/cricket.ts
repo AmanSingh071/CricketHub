@@ -35,34 +35,18 @@ export async function getMatch(id:string):Promise<any|null>{
   }catch{return null}
 }
 
-function normalizeSelfHostedScore(j:any,id:string){
-  if(!j||j.status!=="success")return null;
-  const batting=(j.current_batsmen||[]).map((p:any)=>({
-    batsman:p.name,
-    runs:Number((String(p.score||"").match(/^(\d+)/)||[])[1])||0,
-    balls:Number((String(p.score||"").match(/\((\d+)\)/)||[])[1])||0,
-  }));
-  const m=String(j.score||"").match(/(\d+)\/(\d+)\s*\(([\d.]+)\)/);
-  const bowling=j.current_bowler?.name&&j.current_bowler.name!=="Not available"
-    ?[{bowler:j.current_bowler.name,overs:"—",runs:"—",wickets:"—"}]:[];
-  return {
-    id,
-    name:j.title||"Live Match",
-    status:"Live data from CricketHub self-hosted feed",
-    scorecard:[{
-      inning:j.title||"Live innings",
-      total:m?{runs:Number(m[1]),wickets:Number(m[2]),overs:m[3]}:{},
-      batting,
-      bowling,
-    }],
-    source:"self-hosted-scraper",
-  };
-}
-
 export async function getScorecard(id:string):Promise<any|null>{
   try{
-    const j=await own("/api/score?score="+encodeURIComponent(id),30);
-    return normalizeSelfHostedScore(j,id);
+    const j=await own("/api/score?score="+encodeURIComponent(id),15);
+    if(!j||j.status!=="success")return null;
+    return {
+      id:j.id||id,
+      name:j.name||"Live Match",
+      status:j.statusText||j.matchStatus||"Live",
+      teams:j.teams||[],
+      scorecard:Array.isArray(j.scorecard)?j.scorecard:[],
+      source:j.rawSource||"espn-public-feed",
+    };
   }catch{return null}
 }
 
