@@ -3,7 +3,6 @@ export const runtime="nodejs"; export const dynamic="force-dynamic"; export cons
 const UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const decode=(s:string)=>s.replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;/g,"'").replace(/&quot;/gi,'"').replace(/&#x27;/gi,"'");
 const clean=(s:string)=>decode(s.replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<[^>]+>/g," ")).replace(/\s+/g," ").trim();
-const esc=(s:string)=>s.replace(/[.*+?^$\\{\\}()|[\\]\\\\]/g,"\\$&");
 const numeric=(v:string)=>/^-?\d+(?:\.\d+)?$/.test(v)?Number(v):v;
 function rowBlocks(html:string){const re=/<div\b[^>]*class=["'][^"']*\bcb-scrd-itms\b[^"']*["'][^>]*>/gi,starts:number[]=[];let m:RegExpExecArray|null;while((m=re.exec(html)))starts.push(m.index);return starts.map((s,i)=>html.slice(s,starts[i+1]??Math.min(html.length,s+18000)))}
 function parse(html:string,id:string){
@@ -23,7 +22,7 @@ function parse(html:string,id:string){
    if(/^Total\b/i.test(text)){ensure();const x=text.match(/Total\s+(\d+)\s*[-/]\s*(\d+)\s*\(([^)]+)\)/i);if(x)current.total={runs:Number(x[1]),wickets:Number(x[2]),overs:clean(x[3]).replace(/\s*(Overs?|Ov)/i,"")};continue}
    continue;
   }
-  ensure();const after=clean(text.replace(new RegExp("^"+esc(player)+"\\s*"),""));const nums=after.match(/-?\d+(?:\.\d+)?/g)||[];
+  ensure();const after=clean(text.startsWith(player)?text.slice(player.length):text);const nums=after.match(/-?\d+(?:\.\d+)?/g)||[];
   if(mode==="batting"&&nums.length>=2){const last=nums.slice(-5),stats=last.map(numeric),cut=after.lastIndexOf(last[0]),dismissal=clean(after.slice(0,Math.max(0,cut)));current.batting.push({batsman:player,dismissal,runs:stats[0],balls:stats[1],fours:stats[2]??"",sixes:stats[3]??"",strikeRate:stats[4]??""})}
   else if(mode==="bowling"&&nums.length>=4){const stats=nums.slice(-7).map(numeric);current.bowling.push({bowler:player,overs:stats[0],maidens:stats[1],runs:stats[2],wickets:stats[3],noBalls:stats.length>6?stats[4]:"",wides:stats.length>6?stats[5]:"",economy:stats[stats.length-1]})}
  }
