@@ -12,16 +12,15 @@ const HEADERS = {
 };
 
 function decodeRsc(value:string) {
-  // This is the JavaScript equivalent of Python's
-  // .encode().decode("unicode_escape") used by the proven scraper.
-  try {
-    return JSON.parse("\"" + value.replace(/"/g, "\\\\\"") + "\"");
-  } catch {
-    return value
-      .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-      .replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\t/g, "\t")
-      .replace(/\\\"/g, '"').replace(/\\\\/g, "\\");
-  }
+  // Decode exactly one RSC escape layer. The old JSON-wrapper approach could
+  // double-escape existing \\" sequences and silently corrupt the payload.
+  return value
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\"/g, '"')
+    .replace(/\\\\/g, "\\");
 }
 
 function balancedObject(text:string, start:number) {
