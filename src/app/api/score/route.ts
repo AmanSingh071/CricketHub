@@ -12,10 +12,13 @@ const HEADERS={
 };
 
 function decodeUnicodeEscape(value:string){
-  // Matches the proven Python .encode().decode('unicode_escape') strategy,
-  // while preserving JSON-safe escaped quotes and Unicode.
-  try{return JSON.parse('"'+value.replace(/\\/g,"\\\\").replace(/"/g,'\\\"')+'"')}catch{}
-  try{return value.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\n/g,"\n").replace(/\\r/g,"\r").replace(/\\t/g,"\t").replace(/\\\"/g,'"').replace(/\\\\/g,"\\")}catch{return value}
+  // Decode one escape layer from Cricbuzz's Next.js RSC string payload.
+  // Do not double backslashes: doing that leaves scorecardApiData escaped.
+  try{return JSON.parse('"'+value.replace(/"/g,'\\\"')+'"')}catch{}
+  return value
+    .replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16)))
+    .replace(/\\n/g,"\n").replace(/\\r/g,"\r").replace(/\\t/g,"\t")
+    .replace(/\\\"/g,'"').replace(/\\\\/g,"\\");
 }
 
 function extractBalanced(text:string,start:number){
