@@ -1,79 +1,124 @@
+import re
 from typing import Any
 import httpx
+from bs4 import BeautifulSoup
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
-app = FastAPI(title="CricketHub Score Feed", docs_url=None, redoc_url=None)
+app = FastAPI(title="CricketHub Cricbuzz Scorecard", docs_url=None, redoc_url=None)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
-def clean(v: Any) -> str:
-    return " ".join(str(v or "").split())
+def clean(value: Any) -> str:
+    return " ".join(str(value or "").split())
 
-def event_parts(score: str):
-    if ":" not in score:
-        return None, None
-    league, event = score.split(":", 1)
-    return league.strip(), event.strip()
+def num(value: str):
+    value = clean(value)
+    try:
+        return int(value)
+    except Exception:
+        try:
+            return float(value)
+        except Exception:
+            return value or "—"
 
-def scorecard_from_summary(data: dict, match_id: str):
-    header = data.get("header") or {}
-    competition = (header.get("competitions") or [{}])[0]
-    competitors = competition.get("competitors") or []
+def parse_scorecard(soup: BeautifulSoup, match_id: str):
+    title_node = soup.select_one("h1.cb-nav-hdr") or soup.find("h1")
+    title = clean(title_node.get_text(" ", strip=True) if title_node else "")
+    if not title:
+        title_tag = soup.title
+        title = clean(title_tag.get_text(" ", strip=True) if title_tag else "Live Match")
+
+    status_node = soup.select_one(".cb-text-live, .cb-text-complete, .cb-text-preview")
+    status = clean(status_node.get_text(" ", strip=True) if status_node else "Live")
+
     teams = []
-    for c in competitors:
-        team = c.get("team") or {}
-        teams.append(clean(team.get("displayName") or team.get("shortDisplayName") or team.get("name")))
+    m = re.search(r"(.+?)\s+vs\.?\s+(.+?)(?:\s*,|\s*\||$)", title, re.I)
+    if m:
+        teams = [clean(m.group(1)), clean(m.group(2))]
 
-    cards = data.get("matchcards") or []
     innings = []
-    for card in cards:
-        batting, bowling = [], []
-        title = clean(card.get("title") or card.get("name") or card.get("inning") or "Innings")
-        for p in card.get("batsmen") or card.get("batting") or []:
-            athlete = p.get("athlete") or p.get("player") or {}
-            stats = p.get("stats") or p
-            batting.append({
-                "batsman": clean(athlete.get("displayName") or athlete.get("name") or p.get("name")),
-                "runs": stats.get("runs", stats.get("r", "—")),
-                "balls": stats.get("balls", stats.get("b", "—")),
-                "fours": stats.get("fours", stats.get("4s", "—")),
-                "sixes": stats.get("sixes", stats.get("6s", "—")),
-                "dismissal": clean(stats.get("dismissalText") or stats.get("dismissal") or ""),
-            })
-        for p in card.get("bowlers") or card.get("bowling") or []:
-            athlete = p.get("athlete") or p.get("player") or {}
-            stats = p.get("stats") or p
-            bowling.append({
-                "bowler": clean(athlete.get("displayName") or athlete.get("name") or p.get("name")),
-                "overs": stats.get("overs", stats.get("o", "—")),
-                "maidens": stats.get("maidens", stats.get("m", "—")),
-                "runs": stats.get("runsConceded", stats.get("runs", stats.get("r", "—"))),
-                "wickets": stats.get("wickets", stats.get("w", "—")),
-                "economy": stats.get("economy", stats.get("econ", "—")),
-            })
-        if batting or bowling or title:
-            innings.append({"inning": title, "batting": batting, "bowling": bowling})
+    # Each Cricbuzz scorecard header is followed by scorecard rows.
+    headers = soup.select(".cb-scrd-hdr-rw")
+    for header in headers:
+        header_text = clean(header.get_text(" ", strip=True))
+        section = header.parent
+        rows = []
+        if section:
+            rows = section.select(".cb-scrd-itms")
 
-    status = clean((((competition.get("status") or {}).get("type") or {}).get("detail")) or "Live")
+        batting = []
+        bowling = []
+        mode = "batting"
+        for row in rows:
+            row_text = clean(row.get_text(" ", strip=True))
+            if not row_text:
+                continue
+            low = row_text.lower()
+            if "bowler" in low and ("overs" in low or "wkts" in low):
+                mode = "bowling"
+                continue
+            if "batter" in low or ("runs" in low and "balls" in low and "sr" in low):
+                mode = "batting"
+                continue
+
+            cols = [clean(x.get_text(" ", strip=True)) for x in row.select(":scope > .cb-col")]
+            if len(cols) < 2:
+                continue
+            link = row.find("a")
+            name = clean(link.get_text(" ", strip=True) if link else cols[0])
+            if not name or name.lower() in ("extras", "total"):
+                continue
+
+            if mode == "bowling":
+                if len(cols) >= 6:
+                    bowling.append({
+                        "bowler": name,
+                        "overs": num(cols[1]),
+                        "maidens": num(cols[2]),
+                        "runs": num(cols[3]),
+                        "wickets": num(cols[4]),
+                        "economy": num(cols[5]),
+                    })
+            else:
+                if len(cols) >= 6:
+                    dismissal = cols[0]
+                    batting.append({
+                        "batsman": name,
+                        "dismissal": dismissal,
+                        "runs": num(cols[-5]),
+                        "balls": num(cols[-4]),
+                        "fours": num(cols[-3]),
+                        "sixes": num(cols[-2]),
+                        "strikeRate": num(cols[-1]),
+                    })
+
+        if batting or bowling:
+            innings.append({"inning": header_text or "Innings", "batting": batting, "bowling": bowling})
+
     return {
+        "status": "success",
         "id": match_id,
-        "name": clean(header.get("shortName") or header.get("name") or " vs ".join(teams) or "Live Match"),
+        "name": title,
         "matchStatus": status,
         "teams": teams,
         "scorecard": innings,
-        "rawSource": "espn-public-feed",
+        "rawSource": "cricbuzz-live-scraper",
     }
 
 @app.get("/")
-async def root(score: str = Query(..., min_length=3, max_length=80)):
-    league, event = event_parts(score)
-    if not league or not event:
-        return JSONResponse({"status": "error", "message": "invalid match id"}, status_code=422)
-    url = f"https://site.web.api.espn.com/apis/site/v2/sports/cricket/{league}/summary?event={event}&lang=en&region=in"
+async def root(score: str = Query(..., min_length=4, max_length=30)):
+    if not score.isdigit():
+        return JSONResponse({"status": "error", "message": "invalid Cricbuzz match id"}, status_code=422)
+    url = "https://www.cricbuzz.com/live-cricket-scorecard/" + score
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (CricketHub)"}) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            data = r.json()
-        return {"status": "success", **scorecard_from_summary(data, score)}
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers=HEADERS) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+        soup = BeautifulSoup(response.text, "lxml")
+        data = parse_scorecard(soup, score)
+        return JSONResponse(data)
     except Exception:
-        return JSONResponse({"status": "error", "message": "live score temporarily unavailable"}, status_code=200)
+        return JSONResponse({"status": "error", "message": "scorecard temporarily unavailable"}, status_code=200)
