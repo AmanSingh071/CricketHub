@@ -74,7 +74,7 @@ export default async function MatchPage({
         </a>
       </nav>
 
-      {/* Embedded Stream Player */}
+      {/* DaddyLive Player Stream */}
       <section className="card mt-6 overflow-hidden rounded-3xl bg-black">
         <iframe
           src="https://daddylive.app/player/embed.php?id=admin/ppv-2-nd-test-england-vs-pakistan/1"
@@ -84,7 +84,7 @@ export default async function MatchPage({
           scrolling="no"
           allowFullScreen
           allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-          title="Cricket Stream Player"
+          title="DaddyLive Stream Player"
         />
       </section>
 
