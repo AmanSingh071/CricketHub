@@ -1,7 +1,8 @@
 import { classify, getCurrentMatches, scoreText } from "@/lib/cricket";
 import { channels } from "@/lib/channels";
 
-export const revalidate = 1800;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type MatchLike = any;
 
@@ -137,7 +138,7 @@ export default async function Home() {
           ) : (
             <div className="card mt-6 rounded-3xl p-7">
               <p className="text-lg font-black">No live matches returned right now</p>
-              <p className="mt-2 text-sm text-slate-400">The live feed refreshes every 30 minutes to stay within your 100-request-per-day API limit. Your manually configured channel match remains separate from this automatic live list.</p>
+              <p className="mt-2 text-sm text-slate-400">The live feed is checked directly from CricketHub’s self-hosted data source. Refresh the page to retry if the upstream score source is temporarily unavailable.</p>
             </div>
           )}
         </section>
