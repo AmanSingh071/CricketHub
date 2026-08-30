@@ -1,6 +1,23 @@
 export type CricketScore={r?:number;w?:number;o?:number|string;inning?:string};
 export type CricketMatch={id:string;name:string;matchType?:string;status?:string;date?:string;dateTimeGMT?:string;venue?:string;teams?:string[];teamInfo?:{name?:string;shortname?:string;img?:string}[];score?:CricketScore[];matchStarted?:boolean;matchEnded?:boolean;tossWinner?:string;tossChoice?:string;seriesId?:string;seriesName?:string;source?:string};
 
+const SELF_HOSTED_BASE=(process.env.CRICKET_SCRAPER_URL||process.env.NEXT_PUBLIC_CRICKET_SCRAPER_URL||"").replace(/\/$/,"");
+
+function ownBase(){
+  if(SELF_HOSTED_BASE)return SELF_HOSTED_BASE;
+  if(process.env.VERCEL_URL)return "https://"+process.env.VERCEL_URL;
+  return null;
+}
+
+async function own(path:string,revalidate:number){
+  const base=ownBase();
+  if(!base)return null;
+  try{
+    const res=await fetch(base+path,{next:{revalidate}});
+    if(!res.ok)return null;
+    return await res.json();
+  }catch{return null}
+}
 
 /* Self-hosted cricket data only. No third-party API key or quota. */
 export async function getCurrentMatches():Promise<CricketMatch[]>{
