@@ -1,0 +1,1 @@
+import SearchMatches from "@/components/SearchMatches";export const dynamic="force-dynamic";export default function SearchPage(){return <SearchMatches/>}
