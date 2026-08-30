@@ -1,4 +1,5 @@
 import LiveMatches from "@/components/LiveMatches";
+import { scoreText } from "@/lib/cricket";
 import { channels } from "@/lib/channels";
 
 export const dynamic = "force-dynamic";
