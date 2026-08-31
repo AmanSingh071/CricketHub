@@ -126,6 +126,7 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   const mobileLines=mobile.status==="fulfilled" ? htmlLines(mobile.value) : [];
   const score=parseScore(lines,teams).length ? parseScore(lines,teams) : parseScore(mobileLines,teams);
   const status=extractStatus(lines);
+  if(terminal(status))return null;
 
   return {
     id:candidate.id,
