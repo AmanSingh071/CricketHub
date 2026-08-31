@@ -105,7 +105,7 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
     get("https://m.cricbuzz.com/live-cricket-scorecard/"+candidate.id),
     get("https://www.cricbuzz.com"+candidate.slug)
   ]);
-  const html=(a.status==="fulfilled"?a.value:"")+"\n"+(b.status==="fulfilled"?b.value:"");
+  const html=a.status==="fulfilled" ? a.value : (b.status==="fulfilled" ? b.value : "");
   if(!html)return null;
   const text=clean(html);
   if(terminal(text)||upcoming(text))return null;
