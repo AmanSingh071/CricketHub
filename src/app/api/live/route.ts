@@ -101,26 +101,25 @@ async function get(url:string){
 }
 
 async function verify(candidate:{id:string;name:string;slug:string}):Promise<Match|null>{
-  const [a,b]=await Promise.allSettled([
-    get("https://m.cricbuzz.com/live-cricket-scorecard/"+candidate.id),
-    get("https://www.cricbuzz.com"+candidate.slug)
+  const [page,mobile]=await Promise.allSettled([
+    get("https://www.cricbuzz.com"+candidate.slug),
+    get("https://m.cricbuzz.com/live-cricket-scorecard/"+candidate.id)
   ]);
-  const html=a.status==="fulfilled" ? a.value : (b.status==="fulfilled" ? b.value : "");
+  const html=page.status==="fulfilled" ? page.value : (mobile.status==="fulfilled" ? mobile.value : "");
   if(!html)return null;
+
   const lines=htmlLines(html);
-  const matchSurface=lines.slice(0,140).join(" ");
+  const matchSurface=lines.slice(0,160).join(" ");
   if(terminal(matchSurface)||upcoming(matchSurface))return null;
 
   const teams=split(candidate.name);
   if(teams.length!==2)return null;
-  const score=parseScore(lines,teams);
-  const status=extractStatus(lines);
 
-  // A candidate is live only when the match page has an active score surface.
-  // This prevents unrelated "LIVE" labels elsewhere on Cricbuzz from reviving
-  // old completed matches.
-  const hasActiveSignal=score.length>0||/\b(?:day\s+\d+|session|innings break|stumps|rain delay|lunch|tea)\b/i.test(matchSurface);
-  if(!hasActiveSignal)return null;
+  // Prefer the scorecard page for innings totals, while using the exact
+  // match page for status classification.
+  const scoreLines=mobile.status==="fulfilled" ? htmlLines(mobile.value) : lines;
+  const score=parseScore(scoreLines,teams);
+  const status=extractStatus(lines);
 
   return {
     id:candidate.id,
@@ -134,7 +133,6 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
     source:"cricbuzz-verified-html"
   };
 }
-
 export async function GET(){
   const debug:any[]=[];
   try{
