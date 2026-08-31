@@ -119,7 +119,7 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   // A candidate is live only when the match page has an active score surface.
   // This prevents unrelated "LIVE" labels elsewhere on Cricbuzz from reviving
   // old completed matches.
-  const hasActiveSignal=score.length>0||/\b(?:day\s+\d+|session|innings break|stumps|rain delay|lunch|tea)\b/i.test(text);
+  const hasActiveSignal=score.length>0||/\b(?:day\s+\d+|session|innings break|stumps|rain delay|lunch|tea)\b/i.test(matchSurface);
   if(!hasActiveSignal)return null;
 
   return {
