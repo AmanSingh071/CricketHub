@@ -37,11 +37,13 @@ const terminal=(s:string)=>/\b(?:won by|match drawn|drawn|no result|abandoned|ab
 const upcoming=(s:string)=>/\b(?:match starts at|scorecard will appear once the match starts|has not started|starts at)\b/i.test(s);
 
 function htmlLines(html:string){
-  return clean(html
+  const text=html
     .replace(/<script[\s\S]*?<\/script>/gi,"")
     .replace(/<style[\s\S]*?<\/style>/gi,"")
     .replace(/<(?:br|\/p|\/div|\/span|\/li|\/tr|\/td|\/th|h[1-6])\b[^>]*>/gi,"\n")
-  ).split(/\n+/).map(clean).filter(Boolean);
+    .replace(/<[^>]*>/g,"\n")
+    .replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;/g,"'");
+  return text.split(/\n+/).map(clean).filter(Boolean);
 }
 
 function parseScore(lines:string[],teams:string[]):Score[]{
