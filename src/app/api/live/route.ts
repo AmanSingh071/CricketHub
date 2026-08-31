@@ -123,8 +123,8 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
 
   // Prefer the scorecard page for innings totals, while using the exact
   // match page for status classification.
-  const scoreLines=mobile.status==="fulfilled" ? htmlLines(mobile.value) : lines;
-  const score=parseScore(scoreLines,teams);
+  const mobileLines=mobile.status==="fulfilled" ? htmlLines(mobile.value) : [];
+  const score=parseScore(lines,teams).length ? parseScore(lines,teams) : parseScore(mobileLines,teams);
   const status=extractStatus(lines);
 
   return {
