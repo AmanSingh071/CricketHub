@@ -146,9 +146,8 @@ function parseMobileScorecard(html:string,id:string) {
       if(/^INFO$/i.test(lines[k])) {end=k;break;}
     }
     const block=lines.slice(j,end);
-    const scoreLine=block.find(x=>/^\d+\s*-\s*\d+\s*\([\d.]+\s*Ov/i.test(x));
-    const sm=scoreLine?.match(/^(\d+)\s*-\s*(\d+)\s*\(([\d.]+)\s*Ov/i);
-    const batting:any[]=[]; const bowling:any[]=[];
+    const scoreText=block.join(" ");
+    const sm=scoreText.match(/(?:Total\s*)?(\d+)\s*-\s*(\d+)(?:\s*d)?\s*\(([\d.]+)\s*(?:Ov|Overs)\b/i);\n    const batting:any[]=[]; const bowling:any[]=[];
     const batterAt=block.findIndex(x=>/^Batter$/i.test(x));
     const extrasAt=block.findIndex(x=>/^Extras$/i.test(x));
     const totalAt=block.findIndex(x=>/^Total$/i.test(x));
@@ -199,8 +198,10 @@ function parseMobileScorecard(html:string,id:string) {
   }
 
   const title=lines.find(x=>/Scorecard.*(?:vs|v)/i.test(x))||"Detailed Scorecard";
-  const status=lines.find(x=>/^(Day|Session|Lunch|Tea|Stumps|Rain|Innings Break)/i.test(x))||"";
-  return {status:"success",id,name:title.replace(/\s+-\s+Scorecard.*$/i,"").trim(),matchStatus:status||"Live",scorecard:innings,playingEleven:{},source:"cricbuzz-mobile-html"};
+  const status=lines.find(x=>/^(?:Day\b|Session\b|Lunch\b|Tea\b|Stumps\b|Rain\b|Innings Break\b|.+\bwon by\b|Match drawn\b|No result\b|Abandoned\b)/i.test(x))||"";
+  const pageTitle=decodeHtml((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||"").replace(/<[^>]*>/g,"").replace(/\s+/g," ").trim();
+  const matchName=(pageTitle||title).replace(/\s*-\s*(?:Scorecard|Cricbuzz).*$/i,"").replace(/\s+Live Cricket Stream.*$/i,"").trim();
+  return {status:"success",id,name:matchName||"Detailed Scorecard",matchStatus:status||"Match data available",scorecard:innings,playingEleven:{},source:"cricbuzz-mobile-html"};
 }
 
 function normalize(data:any, id:string, source:string) {
