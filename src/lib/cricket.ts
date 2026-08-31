@@ -31,7 +31,21 @@ export async function getCurrentMatches():Promise<CricketMatch[]>{
 export async function getMatch(id:string):Promise<any|null>{
   try{
     const live=await getCurrentMatches();
-    return live.find(m=>String(m.id)===String(id))||null;
+    const found=live.find(m=>String(m.id)===String(id));
+    if(found)return found;
+    const j=await own("/api/score?score="+encodeURIComponent(id),15);
+    if(j?.status==="success")return {
+      id,
+      name:j.name||"Cricket Match",
+      status:j.matchStatus||j.statusText||"Match details available",
+      teams:Array.isArray(j.teams)?j.teams:[],
+      score:Array.isArray(j.scorecard)?j.scorecard.map((x:any)=>({inning:x.inning,r:x.total?.runs,w:x.total?.wickets,o:x.total?.overs})).filter((x:any)=>x.r!==undefined):[],
+      matchStarted:!j?.result,
+      matchEnded:!!j?.result,
+      venue:j.venue,
+      matchType:j.matchType
+    };
+    return null;
   }catch{return null}
 }
 
