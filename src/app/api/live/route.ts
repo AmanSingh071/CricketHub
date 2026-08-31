@@ -107,12 +107,12 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   ]);
   const html=a.status==="fulfilled" ? a.value : (b.status==="fulfilled" ? b.value : "");
   if(!html)return null;
-  const text=clean(html);
-  if(terminal(text)||upcoming(text))return null;
+  const lines=htmlLines(html);
+  const matchSurface=lines.slice(0,140).join(" ");
+  if(terminal(matchSurface)||upcoming(matchSurface))return null;
 
   const teams=split(candidate.name);
   if(teams.length!==2)return null;
-  const lines=htmlLines(html);
   const score=parseScore(lines,teams);
   const status=extractStatus(lines);
 
