@@ -7,13 +7,7 @@ export type Channel={
 };
 
 export const channels:Channel[]=[
-  {
-    id:"willow-cricket",
-    channel_name:"Willow Cricket",
-    url:"https://daddylive.app/player/embed.php?id=346",
-    nowPlaying:"Pakistan vs England",
-    teams:["Pakistan","England"]
-  },
+  {id:"willow-cricket",channel_name:"Willow Cricket",url:"https://daddylive.app/player/embed.php?id=346"},
   {id:"willow-2-cricket",channel_name:"Willow 2 Cricket",url:"https://daddylive.app/player/embed.php?id=598"},
   {id:"sony-ten-1",channel_name:"SONY TEN 1",url:"https://daddylive.app/player/embed.php?id=885"},
   {id:"sony-ten-2",channel_name:"SONY TEN 2",url:"https://daddylive.app/player/embed.php?id=886"},
