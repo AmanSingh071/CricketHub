@@ -51,7 +51,11 @@ function parseScore(lines:string[],teams:string[]):Score[]{
   const seen=new Set<string>();
   for(let i=0;i<lines.length;i++){
     if(!/\b(?:1st|2nd|3rd|4th)\s+Inn(?:ings)?\b/i.test(lines[i]))continue;
-    const block=lines.slice(i,Math.min(lines.length,i+80));
+    let end=Math.min(lines.length,i+120);
+    for(let k=i+1;k<Math.min(lines.length,i+120);k++){
+      if(/\b(?:1st|2nd|3rd|4th)\s+Inn(?:ings)?\b/i.test(lines[k])||/^INFO$/i.test(lines[k])){end=k;break;}
+    }
+    const block=lines.slice(i,end);
     const joined=block.join(" ");
     const m=joined.match(/(?:Total\s*)?(\d+)\s*-\s*(\d+)(?:\s*(?:d|all out))?\s*\(([\d.]+)\s*(?:Ov|Overs)\b/i);
     if(!m)continue;
@@ -110,7 +114,7 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
 
   const lines=htmlLines(html);
   const joined=lines.join(" ");
-  const pos=joined.toLowerCase().lastIndexOf(candidate.name.toLowerCase());
+  const pos=joined.toLowerCase().indexOf(candidate.name.toLowerCase());
   const matchSurface=pos>=0 ? joined.slice(pos,pos+1800) : joined.slice(0,1800);
   if(terminal(matchSurface)||upcoming(matchSurface))return null;
 
