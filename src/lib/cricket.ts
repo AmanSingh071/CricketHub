@@ -28,10 +28,15 @@ export async function getCurrentMatches():Promise<CricketMatch[]>{
   }catch{return []}
 }
 
+export async function getRecentMatches():Promise<CricketMatch[]>{
+  const j=await own("/api/history",300);
+  return Array.isArray(j?.data)?j.data:[];
+}
+
 export async function getMatch(id:string):Promise<any|null>{
   try{
-    const live=await getCurrentMatches();
-    const found=live.find(m=>String(m.id)===String(id));
+    const [live,recent]=await Promise.all([getCurrentMatches(),getRecentMatches()]);
+    const found=[...live,...recent].find(m=>String(m.id)===String(id));
     if(found)return found;
     const j=await own("/api/score?score="+encodeURIComponent(id),15);
     if(j?.status==="success")return {
