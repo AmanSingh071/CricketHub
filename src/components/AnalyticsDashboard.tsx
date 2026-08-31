@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 export type AnalyticsMatch = {
   id: string;
@@ -145,7 +145,7 @@ export default function AnalyticsDashboard(props: Props) {
         )) : <p className="rounded-2xl border border-[#20364d] bg-[#0b1726] p-6 text-slate-400">No recent match rows are available yet.</p>}
       </div>
     ),
-  } satisfies Record<TabId, React.ReactNode>;
+  } satisfies Record<TabId, ReactNode>;
 
   return (
     <div className="mt-8">
