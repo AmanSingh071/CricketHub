@@ -1,7 +1,1 @@
-import { NextResponse } from "next/server";
-import { classify, getCurrentMatches } from "@/lib/cricket";
-export const revalidate=60;
-export async function GET(){
- const matches=await getCurrentMatches();
- return NextResponse.json({updatedAt:new Date().toISOString(),...classify(matches),all:matches},{headers:{"Cache-Control":"s-maxage=60, stale-while-revalidate=300"}});
-}
+import { NextResponse } from "next/server";import { classify,getCurrentMatches,getRecentMatches } from "@/lib/cricket";export const dynamic="force-dynamic";export async function GET(){const[live,recent]=await Promise.all([getCurrentMatches(),getRecentMatches()]);const all=[...new Map([...live,...recent].map(m=>[m.id,m])).values()];return NextResponse.json({updatedAt:new Date().toISOString(),...classify(all),all},{headers:{"Cache-Control":"no-store"}})}
