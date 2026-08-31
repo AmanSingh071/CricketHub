@@ -147,7 +147,8 @@ function parseMobileScorecard(html:string,id:string) {
     }
     const block=lines.slice(j,end);
     const scoreText=block.join(" ");
-    const sm=scoreText.match(/(?:Total\s*)?(\d+)\s*-\s*(\d+)(?:\s*d)?\s*\(([\d.]+)\s*(?:Ov|Overs)\b/i);\n    const batting:any[]=[]; const bowling:any[]=[];
+    const sm=scoreText.match(/(?:Total\s*)?(\d+)\s*-\s*(\d+)(?:\s*d)?\s*\(([\d.]+)\s*(?:Ov|Overs)\b/i);
+    const batting:any[]=[]; const bowling:any[]=[];
     const batterAt=block.findIndex(x=>/^Batter$/i.test(x));
     const extrasAt=block.findIndex(x=>/^Extras$/i.test(x));
     const totalAt=block.findIndex(x=>/^Total$/i.test(x));
