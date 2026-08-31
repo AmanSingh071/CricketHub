@@ -73,10 +73,9 @@ function parseScore(lines:string[],teams:string[]):Score[]{
 }
 
 function extractStatus(lines:string[]){
-  const joined=lines.join(" ");
-  const end=joined.match(/(?:[A-Z][A-Za-z .&'()\-]{1,80}\s+won by\s+[^.]{1,100}|Match drawn|No result|Abandoned)/i);
-  if(end)return clean(end[0]);
-  const live=lines.find(x=>/\b(?:Day\s+\d+.*(?:Session|Stumps|Lunch|Tea)|Innings Break|Rain Delay|Rain|Stumps|Lunch|Tea)\b/i.test(x));
+  const end=lines.find(x=>terminal(clean(x)));
+  if(end)return clean(end);
+  const live=lines.find(x=>/\b(?:Day\s+\d+.*(?:Session|Stumps|Lunch|Tea)|Innings Break|Rain Delay|Rain|Stumps|Lunch|Tea|opt to)\b/i.test(x));
   return live?clean(live):"Live";
 }
 
@@ -124,8 +123,10 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   // Prefer the scorecard page for innings totals, while using the exact
   // match page for status classification.
   const scoreLines=mobile.status==="fulfilled" ? htmlLines(mobile.value) : lines;
+  const scoreStatus=extractStatus(scoreLines);
+  if(terminal(scoreStatus)||upcoming(scoreStatus))return null;
   const score=parseScore(scoreLines,teams);
-  const status=extractStatus(lines);
+  const status=scoreStatus!=="Live" ? scoreStatus : extractStatus(lines);
 
   return {
     id:candidate.id,
