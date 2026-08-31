@@ -109,7 +109,9 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   if(!html)return null;
 
   const lines=htmlLines(html);
-  const matchSurface=lines.slice(0,160).join(" ");
+  const joined=lines.join(" ");
+  const pos=joined.toLowerCase().lastIndexOf(candidate.name.toLowerCase());
+  const matchSurface=pos>=0 ? joined.slice(pos,pos+1800) : joined.slice(0,1800);
   if(terminal(matchSurface)||upcoming(matchSurface))return null;
 
   const teams=split(candidate.name);
