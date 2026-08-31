@@ -99,7 +99,7 @@ function decodeHtml(s:string) {
 function profileLabel(anchor:string) {
   const title = anchor.match(/\btitle=["']([^"']+)["']/i)?.[1]
     || anchor.match(/\baria-label=["']([^"']+)["']/i)?.[1];
-  if (title && !/^view profile$/i.test(title.trim())) return title.trim();
+  if (title && !/^view profile$/i.test(title.trim())) return title.trim().replace(/^view profile of\s+/i, "");
 
   const href = anchor.match(/\bhref=["']([^"']+)["']/i)?.[1] || "";
   const parts = href.split(/[/?#]/).filter(Boolean);
@@ -119,7 +119,7 @@ function htmlLines(html:string) {
     (anchor) => {
       const label = profileLabel(anchor);
       const visible = anchor.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-      return label || visible;
+      return (label || visible).replace(/^view profile of\s+/i, "");
     }
   );
 
