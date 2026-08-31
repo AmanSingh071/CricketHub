@@ -1,1 +1,58 @@
-import {getCurrentMatches,getRecentMatches,getScorecard}from"@/lib/cricket";export const dynamic="force-dynamic";export default async function Analytics(){const[live,recent]=await Promise.all([getCurrentMatches(),getRecentMatches()]);const cards=(await Promise.all(recent.slice(0,5).map(m=>getScorecard(m.id)))).filter(Boolean) as any[];let runs=0,overs=0,innings=0;for(const c of cards)for(const i of c.scorecard||[]){if(i.total?.runs!==undefined&&i.total?.runs!==""){runs+=Number(i.total.runs)||0;overs+=Number(i.total.overs)||0;innings++}}const rr=overs?(runs/overs).toFixed(2):"—";const metrics=[["Live matches",String(live.length),"Currently verified active matches"],["Recent results",String(recent.length),"Historical results available"],["Innings analysed",String(innings),"Loaded completed scorecard innings"],["Runs analysed",String(runs),"Across loaded historical innings"],["Average run rate",rr,"Runs per over in analysed data"],["Scorecard coverage",String(cards.length),"Recent matches with parsed scorecards"]];return <main className="mx-auto min-h-screen max-w-7xl px-4 py-8"><p className="text-xs font-black tracking-[.2em] text-purple-300">CRICKET INTELLIGENCE</p><h1 className="mt-2 text-4xl font-black">Analytics Hub</h1><p className="mt-3 text-slate-400">Calculated from CricketHub's live feed and recently parsed historical scorecards.</p><div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{metrics.map(([title,value,desc],i)=><section key={title} className="card rounded-3xl p-6"><span className="text-2xl">{["📡","🏁","📋","🏏","⚡","🧠"][i]}</span><p className="mt-5 text-sm font-bold text-slate-400">{title}</p><h2 className="mt-2 text-3xl font-black text-green-300">{value}</h2><p className="mt-3 text-sm text-slate-400">{desc}</p></section>)}</div><a href="/matches" className="mt-7 inline-block rounded-xl bg-green-500 px-5 py-3 font-black text-slate-950">Browse all results →</a></main>}
+import AnalyticsDashboard,{type AnalyticsMatch}from"@/components/AnalyticsDashboard";
+import {getCurrentMatches,getRecentMatches}from"@/lib/cricket";
+
+export const dynamic="force-dynamic";
+
+export default async function Analytics(){
+  const[live,recent]=await Promise.all([getCurrentMatches(),getRecentMatches()]);
+  const matches=[...live,...recent] as AnalyticsMatch[];
+
+  let runs=0;
+  let overs=0;
+  let innings=0;
+  let scorecardCoverage=0;
+
+  for(const match of matches){
+    if(match.score?.length)scorecardCoverage++;
+    for(const score of match.score||[]){
+      const r=Number(score.r);
+      const o=Number(score.o);
+      if(Number.isFinite(r)&&Number.isFinite(o)&&o>0){
+        runs+=r;
+        overs+=o;
+        innings++;
+      }
+    }
+  }
+
+  const averageRunRate=overs?(runs/overs).toFixed(2):"—";
+
+  const appearances=new Map<string,number>();
+  for(const match of matches){
+    for(const team of match.teams||[]){
+      if(!team)continue;
+      appearances.set(team,(appearances.get(team)||0)+1);
+    }
+  }
+  const topTeams=[...appearances.entries()]
+    .map(([name,count])=>({name,matches:count}))
+    .sort((a,b)=>b.matches-a.matches)
+    .slice(0,8);
+
+  return <main className="mx-auto min-h-screen max-w-7xl px-4 py-8">
+    <p className="text-xs font-black tracking-[.2em] text-purple-300">CRICKET INTELLIGENCE</p>
+    <h1 className="mt-2 text-4xl font-black">Analytics Hub</h1>
+    <p className="mt-3 max-w-3xl text-slate-400">Interactive analysis built from the matches currently available to CricketHub. Select any analysis card below to open its data panel.</p>
+
+    <AnalyticsDashboard
+      liveCount={live.length}
+      recentCount={recent.length}
+      inningsAnalysed={innings}
+      runsAnalysed={runs}
+      averageRunRate={averageRunRate}
+      scorecardCoverage={scorecardCoverage}
+      matches={matches}
+      topTeams={topTeams}
+    />
+  </main>
+}
