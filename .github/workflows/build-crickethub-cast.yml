@@ -1,0 +1,31 @@
+name: Build CricketHub Cast APK
+
+on:
+  push:
+    branches: [cast-free]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout CricketHub
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build free Cast helper
+        run: bash scripts/build-crickethub-cast.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CricketHub-Cast-debug
+          path: artifacts/CricketHub-Cast-debug.apk
+          if-no-files-found: error
