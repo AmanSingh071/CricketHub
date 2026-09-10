@@ -29,7 +29,6 @@ if 'android.permission.INTERNET' not in s:
 s=s.replace('android:icon="@mipmap/ic_launcher"','android:icon="@drawable/ic_crickethub"').replace('android:roundIcon="@mipmap/ic_launcher_round"','android:roundIcon="@drawable/ic_crickethub"')
 if 'android:hardwareAccelerated=' not in s:
     s=s.replace('<application','<application android:hardwareAccelerated="true"',1)
-# Remove any upstream WebRTC-only manifest declarations.
 s=re.sub(r'\n\s*<activity\s+android:name="\.WebRtcProjectionRequestActivity".*?</activity>\s*', '\n', s, flags=re.S)
 s=re.sub(r'\n\s*<service\s+android:name="\.WebRtcForegroundService".*?</service>\s*', '\n', s, flags=re.S)
 needle='''        <activity\n            android:name=".ui.MainActivity"'''
@@ -50,13 +49,13 @@ if 'https://maven.mozilla.org/maven2/' not in s:
     s=s.replace('dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n', 'dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n        maven { url = uri("https://maven.mozilla.org/maven2/") }\n',1)
 settings.write_text(s)
 g=gradle.read_text()
-g=g.replace('compileSdk = 36','compileSdk = 37')
+# GeckoView 155 requires Android API 37.1; use AGP 9.x's minor API DSL.
+g=re.sub(r'compileSdk\s*=\s*36(?:\s*\n\s*compileSdkExtension\s*=\s*1)?', 'compileSdk {\n        version = release(37) { minorApiLevel = 1 }\n    }', g)
+g=re.sub(r'compileSdk\s*=\s*37\s*\n\s*compileSdkExtension\s*=\s*1', 'compileSdk {\n        version = release(37) { minorApiLevel = 1 }\n    }', g)
 g=g.replace('implementation(libs.webrtc.sdk.android)','')
 g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:[^\"\']+', 'org.mozilla.geckoview:geckoview:155.0.20260903215306', g)
 if 'org.mozilla.geckoview:geckoview:155.0.20260903215306' not in g:
     g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:155.0.20260903215306")\n',1)
-if 'compileSdkExtension = 1' not in g:
-    g=g.replace('compileSdk = 37','compileSdk = 37\n    compileSdkExtension = 1',1)
 if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
     g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
 gradle.write_text(g)
