@@ -56,16 +56,25 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
   const [scanning, setScanning] = useState(false);
   const [bridge, setBridge] = useState<"unknown" | "online" | "offline">("unknown");
   const [platform, setPlatform] = useState<Platform>("desktop");
+  const [compact, setCompact] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    setPlatform(getPlatform());
+    const update = () => {
+      setPlatform(getPlatform());
+      setCompact(window.innerWidth <= 768);
+    };
+    update();
+    window.addEventListener("resize", update);
     return () => {
+      window.removeEventListener("resize", update);
       streamRef.current?.getTracks().forEach(t => t.stop());
       try { callRef.current?.close(); } catch {}
       try { peerRef.current?.destroy(); } catch {}
     };
   }, []);
+
+  const mobile = platform !== "desktop" || compact;
 
   async function scanLocalTvs() {
     setScanning(true);
@@ -89,9 +98,9 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
     setOpen(true);
     setError("");
     setCopied(false);
-    if (getPlatform() !== "desktop") {
-      // Native phone mirroring is the most compatible free phone → TV path.
-      setPlatform(getPlatform());
+    setPlatform(getPlatform());
+    setCompact(window.innerWidth <= 768);
+    if (getPlatform() !== "desktop" || window.innerWidth <= 768) {
       setStatus("mobile");
       return;
     }
@@ -101,6 +110,7 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
   }
 
   async function createReceiverSession() {
+    setError("");
     try {
       const Peer = await loadPeerJS();
       const nextCode = newCode();
@@ -121,7 +131,6 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
   }
 
   async function useReceiver() {
-    setError("");
     setStatus("creating");
     await createReceiverSession();
   }
@@ -141,7 +150,7 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
     setStatus("connecting");
     try {
       if (!navigator.mediaDevices?.getDisplayMedia) {
-        throw new Error("This browser does not support browser screen sharing. Use your phone's built-in Cast / Smart View / Screen Mirroring instead.");
+        throw new Error("This browser does not support browser screen sharing. Use Cast / Smart View / Screen Mirroring from your phone instead.");
       }
       setOpen(false);
       await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -170,7 +179,7 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
       setStatus("mirroring");
     } catch (e: any) {
       setOpen(true);
-      setError(e?.name === "NotAllowedError" ? "Screen sharing was cancelled. Choose the screen or current tab in the browser picker." : e?.message || "Could not start TV mirroring.");
+      setError(e?.name === "NotAllowedError" ? "Screen sharing was cancelled. Choose the player tab or screen in the browser picker." : e?.message || "Could not start TV mirroring.");
       setStatus(code ? "waiting" : "mobile");
     }
   }
@@ -195,7 +204,6 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
   }
 
   const active = status === "mirroring";
-  const mobile = platform !== "desktop";
 
   return <>
     <button type="button" onClick={active ? stop : openMirror}
@@ -218,29 +226,34 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
         {mobile && status === "mobile" && <>
           <div className="mt-5 rounded-2xl border border-sky-400/20 bg-sky-500/[.06] p-4">
             <p className="font-black text-sky-200">📱 Phone → TV</p>
-            <p className="mt-1 text-sm leading-5 text-slate-300">For phones, the most reliable free method is your phone's built-in screen mirroring. CricketHub cannot open the system Cast/AirPlay picker from a normal website.</p>
+            <p className="mt-1 text-sm leading-5 text-slate-300">Use your phone's built-in screen mirroring for the most compatible free experience. CricketHub cannot open the system Cast/AirPlay picker from a normal website.</p>
           </div>
 
           <div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-4">
-            <p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">{platform === "android" ? "Android" : "iPhone / iPad"}</p>
+            <p className="text-xs font-black uppercase tracking-[.16em] text-slate-500">{platform === "android" ? "Android" : platform === "ios" ? "iPhone / iPad" : "Phone / tablet"}</p>
             {platform === "android" ? <ol className="mt-3 space-y-2 text-sm leading-5 text-slate-200">
-              <li><b>1.</b> Keep your phone and TV on the same Wi-Fi.</li>
+              <li><b>1.</b> Keep the phone and TV on the same Wi-Fi.</li>
               <li><b>2.</b> Open Android Quick Settings.</li>
               <li><b>3.</b> Tap <b>Cast</b>, <b>Screen Cast</b> or <b>Smart View</b>.</li>
               <li><b>4.</b> Select your TV and start mirroring.</li>
-              <li><b>5.</b> Return to CricketHub — the whole player screen will appear on the TV.</li>
-            </ol> : <ol className="mt-3 space-y-2 text-sm leading-5 text-slate-200">
-              <li><b>1.</b> Keep your iPhone/iPad and TV on the same Wi-Fi.</li>
+              <li><b>5.</b> Return to CricketHub and play the match.</li>
+            </ol> : platform === "ios" ? <ol className="mt-3 space-y-2 text-sm leading-5 text-slate-200">
+              <li><b>1.</b> Keep the iPhone/iPad and TV on the same Wi-Fi.</li>
               <li><b>2.</b> Open Control Center.</li>
               <li><b>3.</b> Tap <b>Screen Mirroring</b> / <b>AirPlay</b>.</li>
               <li><b>4.</b> Select your compatible TV or Apple TV.</li>
               <li><b>5.</b> Return to CricketHub and play the match.</li>
+            </ol> : <ol className="mt-3 space-y-2 text-sm leading-5 text-slate-200">
+              <li><b>1.</b> Keep the phone/tablet and TV on the same Wi-Fi.</li>
+              <li><b>2.</b> Use the device's <b>Cast</b>, <b>Screen Mirroring</b> or <b>AirPlay</b> control.</li>
+              <li><b>3.</b> Select your TV.</li>
+              <li><b>4.</b> Return to CricketHub and play the match.</li>
             </ol>}
           </div>
 
           <div className="mt-4 rounded-2xl border border-green-400/20 bg-green-500/[.05] p-4">
-            <p className="font-black text-green-300">Want to use the CricketHub receiver instead?</p>
-            <p className="mt-1 text-xs leading-5 text-slate-400">Open <b className="text-white">/tv</b> in the TV browser, then CricketHub can send the player peer-to-peer without a paid Cast service.</p>
+            <p className="font-black text-green-300">Use CricketHub TV receiver</p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">For TVs with a browser, open <b className="text-white">/tv</b> on the TV. This keeps the video peer-to-peer and uses no paid Cast service.</p>
             <button type="button" onClick={copyTvLink} className="mt-3 w-full rounded-xl bg-white/[.08] px-4 py-2.5 text-sm font-black text-white hover:bg-white/[.12]">{copied ? "✓ TV link copied" : "Copy TV receiver link"}</button>
             <button type="button" onClick={useReceiver} className="mt-2 w-full rounded-xl border border-green-400/30 px-4 py-2.5 text-sm font-black text-green-300 hover:bg-green-500/10">Use 6-digit CricketHub code</button>
           </div>
@@ -259,11 +272,11 @@ export default function PlayerMirrorButton({ channelName }: { channelName: strin
           <button onClick={startBrowserShare} disabled={status === "connecting"} className="mt-5 w-full rounded-xl bg-green-500 px-5 py-3 font-black text-slate-950 disabled:opacity-60">{status === "connecting" ? "Choose screen…" : mobile ? "Try browser screen sharing" : "Start mirroring"}</button>
         </>}
 
-        {status === "mirroring" && <div className="mt-7 rounded-2xl border border-green-400/20 bg-green-500/[.05] p-5 text-center"><div className="text-2xl">📺</div><h3 className="mt-3 text-xl font-black">Mirroring to TV</h3><p className="mt-1 text-sm text-slate-400">Your {mobile ? "phone" : "player"} screen is being sent peer-to-peer.</p><button onClick={stop} className="mt-4 rounded-xl border border-red-400/30 px-5 py-3 font-black text-red-300">Stop mirroring</button></div>}
+        {status === "mirroring" && <div className="mt-7 rounded-2xl border border-green-400/20 bg-green-500/[.05] p-6 text-center"><div className="text-2xl">📺</div><h3 className="mt-4 text-xl font-black">Mirroring to TV</h3><p className="mt-2 text-sm text-slate-400">Your screen is being sent peer-to-peer.</p><button onClick={stop} className="mt-5 rounded-xl border border-red-400/30 px-5 py-3 font-black text-red-300">Stop mirroring</button></div>}
 
-        {status === "error" && <div className="mt-6 rounded-2xl border border-red-400/20 bg-red-500/[.05] p-4"><p className="font-black text-red-300">Could not connect</p><p className="mt-2 text-sm text-slate-400">{error}</p><button onClick={mobile ? () => setStatus("mobile") : openMirror} className="mt-4 rounded-xl bg-white/[.08] px-4 py-2 font-bold">Try again</button></div>}
-        {error && status !== "error" && <p className="mt-3 rounded-xl bg-red-500/[.06] p-3 text-sm leading-5 text-red-300">{error}</p>}
-        <p className="mt-4 text-center text-[10px] leading-4 text-slate-500">100% free. No Cast developer account, subscription, paid API, or CricketHub video relay.</p>
+        {status === "error" && <div className="mt-7 rounded-2xl border border-red-400/20 bg-red-500/[.05] p-5"><p className="font-black text-red-300">Could not connect</p><p className="mt-2 text-sm text-slate-400">{error}</p><button onClick={openMirror} className="mt-4 rounded-xl bg-white/[.08] px-4 py-2 font-bold">Try again</button></div>}
+        {error && status !== "error" && <p className="mt-4 rounded-xl bg-red-500/[.06] p-3 text-sm text-red-300">{error}</p>}
+        <p className="mt-5 text-center text-[11px] leading-5 text-slate-500">100% free. No Cast developer account, subscription, paid API, or CricketHub video relay.</p>
       </div>
     </div>}
   </>;
