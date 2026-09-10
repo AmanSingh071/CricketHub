@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 declare global { interface Window { Peer?: any } }
 
@@ -26,7 +25,6 @@ function loadPeerJS() {
 }
 
 export default function TVMirrorReceiver() {
-  const params = useSearchParams();
   const videoRef = useRef<HTMLVideoElement>(null);
   const peerRef = useRef<any>(null);
   const callRef = useRef<any>(null);
@@ -44,12 +42,7 @@ export default function TVMirrorReceiver() {
       const Peer = await loadPeerJS();
       const peer = new Peer(`ch-${clean}`, { secure: true });
       peerRef.current = peer;
-
-      peer.on("open", () => {
-        setState("ready");
-        setMessage("TV is ready. Start mirroring from the player.");
-      });
-
+      peer.on("open", () => { setState("ready"); setMessage("TV is ready. Start mirroring from the player."); });
       peer.on("call", (call: any) => {
         callRef.current = call;
         call.answer();
@@ -57,41 +50,22 @@ export default function TVMirrorReceiver() {
           const video = videoRef.current;
           if (!video) return;
           video.srcObject = stream;
-          video.play().catch(() => setMessage("Press the play button on the TV to start the mirrored stream."));
-          setState("playing");
-          setMessage("Mirroring is active.");
+          video.play().catch(() => setMessage("Press play on the TV if the browser blocks autoplay."));
+          setState("playing"); setMessage("Mirroring is active.");
         });
-        call.on("close", () => {
-          if (videoRef.current) videoRef.current.srcObject = null;
-          setState("ready");
-          setMessage("Mirroring stopped. Start it again from the player.");
-        });
-        call.on("error", () => {
-          setState("error");
-          setMessage("The player disconnected. Connect again using a new code.");
-        });
+        call.on("close", () => { if (videoRef.current) videoRef.current.srcObject = null; setState("ready"); setMessage("Mirroring stopped. Start it again from the player."); });
+        call.on("error", () => { setState("error"); setMessage("The player disconnected. Connect again using a new code."); });
       });
-
-      peer.on("error", (err: any) => {
-        setState("error");
-        setMessage(err?.type === "unavailable-id" ? "This TV code is already in use. Generate a new code on the player." : (err?.message || "Could not connect to the player."));
-      });
+      peer.on("error", (err: any) => { setState("error"); setMessage(err?.type === "unavailable-id" ? "This TV code is already in use. Generate a new code on the player." : (err?.message || "Could not connect to the player.")); });
     } catch (err: any) {
-      setState("error");
-      setMessage(err?.message || "Could not connect to the player.");
+      setState("error"); setMessage(err?.message || "Could not connect to the player.");
     }
   }
 
   useEffect(() => {
-    const initial = params.get("code") || "";
-    if (/^\d{6}$/.test(initial)) {
-      setInput(initial);
-      connect(initial);
-    }
-    return () => {
-      try { callRef.current?.close(); } catch {}
-      try { peerRef.current?.destroy(); } catch {}
-    };
+    const initial = new URLSearchParams(window.location.search).get("code") || "";
+    if (/^\d{6}$/.test(initial)) { setInput(initial); connect(initial); }
+    return () => { try { callRef.current?.close(); } catch {} try { peerRef.current?.destroy(); } catch {} };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -101,10 +75,7 @@ export default function TVMirrorReceiver() {
         <div><p className="text-xs font-black tracking-[.2em] text-green-400">CRICKETHUB TV</p><h1 className="mt-1 text-xl font-black md:text-2xl">TV Mirror Receiver</h1></div>
         {state === "playing" && <span className="rounded-full bg-green-500/15 px-4 py-2 text-xs font-black text-green-300">● MIRRORING</span>}
       </header>
-
-      {state === "playing" ? <div className="flex flex-1 items-center justify-center bg-black p-0">
-        <video ref={videoRef} className="max-h-screen w-full object-contain" autoPlay playsInline controls={false} />
-      </div> : <div className="flex flex-1 items-center justify-center px-5 py-10">
+      {state === "playing" ? <div className="flex flex-1 items-center justify-center bg-black p-0"><video ref={videoRef} className="max-h-screen w-full object-contain" autoPlay playsInline controls={false} /></div> : <div className="flex flex-1 items-center justify-center px-5 py-10">
         <section className="w-full max-w-xl rounded-[2rem] border border-white/10 bg-[#081321] p-7 text-center shadow-2xl md:p-10">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-green-500/10 text-4xl">📺</div>
           <h2 className="mt-6 text-3xl font-black">Connect this TV</h2>
