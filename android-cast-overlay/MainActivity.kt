@@ -10,11 +10,11 @@ import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import org.mozilla.geckoview.AllowOrDeny
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
-import org.mozilla.geckoview.GeckoSession.NavigationDelegate.AllowOrDeny
 
 /** Proper in-app CricketHub renderer using Mozilla GeckoView. */
 class MainActivity : ComponentActivity() {
@@ -56,8 +56,6 @@ class MainActivity : ComponentActivity() {
         try {
             val rt = runtime ?: GeckoRuntime.create(this).also { runtime = it }
             session = GeckoSession()
-            // Mozilla's current consumer guide recommends a ContentDelegate
-            // workaround for embedded GeckoView sessions.
             session.setContentDelegate(object : GeckoSession.ContentDelegate {})
             session.setNavigationDelegate(object : GeckoSession.NavigationDelegate {
                 override fun onCanGoBack(session: GeckoSession, value: Boolean) {
@@ -72,8 +70,6 @@ class MainActivity : ComponentActivity() {
                     if (url.startsWith("crickethub://cast", ignoreCase = true)) {
                         val castUri = Uri.parse(url)
                         castUri.getQueryParameter("url")?.takeIf { it.isNotBlank() }?.let { playerUrl ->
-                            // Put the real player into the embedded GeckoView
-                            // before showing the short-lived device picker.
                             session.loadUri(playerUrl)
                         }
                         runCatching {
