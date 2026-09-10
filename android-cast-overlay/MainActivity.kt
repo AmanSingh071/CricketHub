@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -13,15 +12,14 @@ import androidx.activity.ComponentActivity
 import androidx.browser.customtabs.CustomTabsIntent
 
 /**
- * CricketHub website host.
+ * CricketHub launcher.
  *
- * We intentionally do NOT embed the remote Next.js site in Android WebView.
- * The user's device showed a WebView compositor black-surface failure even
- * after hardware/software renderer changes. Android Custom Tabs uses the
- * device's production Chromium renderer instead, which is the reliable path
- * for this remote website while still keeping the site in the CricketHub app
- * launch flow. The website's crickethub://cast link is routed back into the
- * integrated CastActivity through the manifest intent-filter.
+ * IMPORTANT: this intentionally does not create an Android WebView. Some phones
+ * expose a device/GPU-specific WebView compositor bug where a correctly loaded
+ * page is painted as a solid black surface. CricketHub is therefore rendered by
+ * the device's Chromium browser through Android Custom Tabs. The CricketHub Cast
+ * URI remains registered by this APK, so the Cast button can return to our native
+ * Cast helper without requiring anything on the TV.
  */
 class MainActivity : ComponentActivity() {
     private val homeUrl = "https://crickethub-vibe-coder22.vercel.app/"
@@ -39,57 +37,61 @@ class MainActivity : ComponentActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(40, 40, 40, 40)
             setBackgroundColor(Color.rgb(5, 14, 25))
+            setPadding(40, 40, 40, 40)
         }
-        val logo = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "🏏"
-            textSize = 58f
+            textSize = 54f
             gravity = Gravity.CENTER
-        }
-        val title = TextView(this).apply {
+        })
+        root.addView(TextView(this).apply {
             text = "CricketHub"
             textSize = 28f
             setTextColor(Color.WHITE)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             gravity = Gravity.CENTER
-        }
-        val detail = TextView(this).apply {
+        })
+        root.addView(TextView(this).apply {
             text = "Opening CricketHub…"
-            textSize = 14f
+            textSize = 15f
             setTextColor(Color.rgb(148, 163, 184))
             gravity = Gravity.CENTER
             setPadding(0, 10, 0, 22)
-        }
-        val progress = ProgressBar(this).apply { isIndeterminate = true }
-        val retry = Button(this).apply {
-            text = "Open CricketHub"
-            setOnClickListener { openCricketHub() }
-        }
-        root.addView(logo)
-        root.addView(title)
-        root.addView(detail)
-        root.addView(progress)
-        root.addView(retry)
+        })
+        root.addView(ProgressBar(this).apply { isIndeterminate = true })
         setContentView(root)
     }
 
     private fun openCricketHub() {
         if (opened || isFinishing) return
         opened = true
-        try {
-            val intent = CustomTabsIntent.Builder()
-                .setToolbarColor(Color.rgb(5, 14, 25))
-                .setSecondaryToolbarColor(Color.rgb(5, 14, 25))
-                .setShowTitle(false)
+        runCatching {
+            val customTabs = CustomTabsIntent.Builder()
+                .setShowTitle(true)
                 .setUrlBarHidingEnabled(true)
                 .setShareState(CustomTabsIntent.SHARE_STATE_OFF)
                 .build()
-            intent.launchUrl(this, Uri.parse(homeUrl))
-            finish()
-        } catch (_: Throwable) {
+            customTabs.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
+            customTabs.launchUrl(this, Uri.parse(homeUrl))
+        }.onFailure {
             opened = false
-            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(homeUrl))) }
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(homeUrl)))
+            }.onFailure {
+                opened = false
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // If the user returns to the launcher after closing the browser tab,
+        // provide a fresh launch rather than leaving an empty native screen.
+        if (opened && !isFinishing) {
+            window.decorView.postDelayed({
+                if (!isFinishing) openCricketHub()
+            }, 350)
         }
     }
 }
