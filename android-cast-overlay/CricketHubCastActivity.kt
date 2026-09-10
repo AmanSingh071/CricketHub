@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -34,7 +33,7 @@ class CricketHubCastActivity : ComponentActivity() {
     private val green = Color.rgb(34, 197, 94)
     private val bg = Color.rgb(7, 17, 31)
     private val card = Color.rgb(12, 29, 47)
-    private val text = Color.WHITE
+    private val white = Color.WHITE
     private val muted = Color.rgb(148, 163, 184)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,7 +65,7 @@ class CricketHubCastActivity : ComponentActivity() {
             text = "Cast to your TV"
             textSize = 30f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(text)
+            setTextColor(white)
             setPadding(0, dp(10), 0, 0)
         }
         val channel = TextView(this).apply {
@@ -88,7 +87,7 @@ class CricketHubCastActivity : ComponentActivity() {
             text = "Finding TVs on your Wi-Fi…"
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(text)
+            setTextColor(white)
             setPadding(0, dp(24), 0, dp(8))
         }
         spinner = ProgressBar(this).apply { isIndeterminate = true }
@@ -139,9 +138,6 @@ class CricketHubCastActivity : ComponentActivity() {
     private fun castTo(device: CastDevice) {
         status.text = "Opening ${device.name}…"
         list.isEnabled = false
-        // Open the same player URL in the phone's browser. The capture service
-        // then starts after the system permission flow, so the player is the
-        // surface being mirrored rather than this picker screen.
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(channelUrl))) }
         android.os.Handler(mainLooper).postDelayed({
             startActivity(Intent(this, WebRtcProjectionRequestActivity::class.java).apply {
@@ -149,7 +145,7 @@ class CricketHubCastActivity : ComponentActivity() {
                 putExtra(WebRtcForegroundService.EXTRA_DEVICE_HOST, device.host)
                 putExtra(WebRtcForegroundService.EXTRA_DEVICE_PORT, if (device.port > 0) device.port else CHROMECAST_DEFAULT_PORT)
                 putExtra(WebRtcForegroundService.EXTRA_APP_ID, DEFAULT_WEBRTC_APP_ID)
-                putExtra(WebRtcForegroundService.EXTRA_PLAYER_URL, channelUrl)
+                putExtra("crickethub_player_url", channelUrl)
             })
             finish()
         }, 650)
