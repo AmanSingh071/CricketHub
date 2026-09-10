@@ -5,9 +5,8 @@ WORK="${RUNNER_TEMP:-/tmp}/crickethub-screencast"
 rm -rf "$WORK"
 git clone --depth 1 https://github.com/ddagunts/ScreenCast.git "$WORK"
 
-# CricketHub uses GeckoView for the embedded website and ScreenCast's HLS
-# MediaProjection path for free phone-to-Cast mirroring. Remove every upstream
-# WebRTC sender/UI source so GeckoView is the only org.webrtc provider.
+# Keep the free MediaProjection/HLS casting path. Remove upstream WebRTC sender
+# code because GeckoView already bundles its own org.webrtc implementation.
 rm -rf "$WORK/app/src/main/java/io/github/ddagunts/screencast/webrtc"
 rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/WebRtcForegroundService.kt"
 rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/WebRtcProjectionRequestActivity.kt"
@@ -31,8 +30,22 @@ if 'android:hardwareAccelerated=' not in s:
     s=s.replace('<application','<application android:hardwareAccelerated="true"',1)
 s=re.sub(r'\n\s*<activity\s+android:name="\.WebRtcProjectionRequestActivity".*?</activity>\s*', '\n', s, flags=re.S)
 s=re.sub(r'\n\s*<service\s+android:name="\.WebRtcForegroundService".*?</service>\s*', '\n', s, flags=re.S)
-needle='''        <activity\n            android:name=".ui.MainActivity"'''
-activity='''        <activity\n            android:name=".CricketHubCastActivity"\n            android:exported="true"\n            android:theme="@style/Theme.ScreenCast"\n            android:excludeFromRecents="true">\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="crickethub" android:host="cast" />\n            </intent-filter>\n        </activity>\n\n'''
+needle='''        <activity
+            android:name=".ui.MainActivity"'''
+activity='''        <activity
+            android:name=".CricketHubCastActivity"
+            android:exported="true"
+            android:theme="@style/Theme.ScreenCast"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="crickethub" android:host="cast" />
+            </intent-filter>
+        </activity>
+
+'''
 if '.CricketHubCastActivity' not in s:
     if needle not in s: raise SystemExit('CricketHubCastActivity manifest insertion point not found')
     s=s.replace(needle,activity+needle,1)
@@ -49,13 +62,12 @@ if 'https://maven.mozilla.org/maven2/' not in s:
     s=s.replace('dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n', 'dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n        maven { url = uri("https://maven.mozilla.org/maven2/") }\n',1)
 settings.write_text(s)
 g=gradle.read_text()
-# GeckoView 155 requires Android API 37.1; use AGP 9.x's minor API DSL.
 g=re.sub(r'compileSdk\s*=\s*36(?:\s*\n\s*compileSdkExtension\s*=\s*1)?', 'compileSdk {\n        version = release(37) { minorApiLevel = 1 }\n    }', g)
 g=re.sub(r'compileSdk\s*=\s*37\s*\n\s*compileSdkExtension\s*=\s*1', 'compileSdk {\n        version = release(37) { minorApiLevel = 1 }\n    }', g)
 g=g.replace('implementation(libs.webrtc.sdk.android)','')
-g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:[^\"\']+', 'org.mozilla.geckoview:geckoview:155.0.20260903215306', g)
-if 'org.mozilla.geckoview:geckoview:155.0.20260903215306' not in g:
-    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:155.0.20260903215306")\n',1)
+g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:[^\"\']+', 'org.mozilla.geckoview:geckoview:157.0.20260909040912', g)
+if 'org.mozilla.geckoview:geckoview:157.0.20260909040912' not in g:
+    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:157.0.20260909040912")\n',1)
 if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
     g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
 gradle.write_text(g)
