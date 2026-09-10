@@ -1,4 +1,4 @@
-name: Build CricketHub Cast APK
+name: Build CricketHub Android App
 
 on:
   push:
@@ -20,12 +20,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Build free Cast helper
+      - name: Build integrated CricketHub app
         run: bash scripts/build-crickethub-cast.sh
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: CricketHub-Cast-debug
-          path: artifacts/CricketHub-Cast-debug.apk
+          name: CricketHub-Android-debug
+          path: artifacts/CricketHub-Android-debug.apk
           if-no-files-found: error
