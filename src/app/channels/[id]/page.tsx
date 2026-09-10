@@ -10,6 +10,6 @@ export default async function Channel({params}:{params:Promise<{id:string}>}){
     <a href="/channels" className="text-green-400">← All Channels</a>
     <div className="mt-8 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black tracking-[.2em] text-green-400">LIVE PLAYER</p><h1 className="mt-2 text-4xl font-black">{c.channel_name}</h1></div>{c.url&&<PlayerMirrorButton channelName={c.channel_name} channelUrl={c.url}/>}</div>
     <div className="card mt-6 overflow-hidden rounded-3xl bg-black">{c.url?<iframe title={c.channel_name} src={c.url} className="aspect-video w-full border-0" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>:<div className="flex aspect-video items-center justify-center p-8 text-center"><div><div className="text-5xl">📺</div><h2 className="mt-5 text-xl font-bold">URL not configured</h2><p className="mt-2 text-sm text-slate-400">Add the channel URL in src/lib/channels.ts.</p></div></div>}</div>
-    {c.url&&<p className="mt-3 text-xs text-slate-500">Tap the TV icon to use the normal Google Cast picker. The TV does not need a CricketHub app or manual website setup.</p>}
+    {c.url&&<p className="mt-3 text-xs text-slate-500">Free Android casting uses the phone's screen and the TV's built-in Cast receiver. No CricketHub app or website is installed on the TV.</p>}
   </main>
 }
