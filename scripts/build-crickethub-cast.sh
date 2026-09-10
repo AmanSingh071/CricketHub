@@ -29,11 +29,13 @@ from pathlib import Path
 import sys
 p = Path(sys.argv[1])
 s = p.read_text()
+# Upstream may already reference a nonexistent EXTRA_PLAYER_URL. Always normalize it.
+s = s.replace('WebRtcForegroundService.EXTRA_PLAYER_URL', '"crickethub_player_url"')
 if 'import android.net.Uri\n' not in s:
     s = s.replace('import android.content.Intent\n', 'import android.content.Intent\nimport android.net.Uri\n', 1)
 marker = '            startForegroundService(svc)\n'
 insert = '''            startForegroundService(svc)\n            // Put the CricketHub player back in the foreground after consent so\n            // MediaProjection captures the actual player surface, not the picker.\n            intent.getStringExtra("crickethub_player_url")?.let { url ->\n                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }\n            }\n'''
-if 'crickethub_player_url' not in s:
+if 'intent.getStringExtra("crickethub_player_url")' not in s:
     if marker not in s:
         raise SystemExit('WebRTC foreground-service start point not found')
     s = s.replace(marker, insert, 1)
