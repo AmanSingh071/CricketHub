@@ -29,16 +29,19 @@ from pathlib import Path
 import sys,re
 settings=Path(sys.argv[1]); gradle=Path(sys.argv[2])
 s=settings.read_text()
-if 'maven.mozilla.org/maven2' not in s:
+# GeckoView must be resolvable from Mozilla's Maven repository in dependencyResolutionManagement.
+if 'https://maven.mozilla.org/maven2/' not in s:
     s=s.replace('        mavenCentral()\n','        mavenCentral()\n        maven { url = uri("https://maven.mozilla.org/maven2/") }\n',1)
+# The ScreenCast template has the repositoriesMode block above; ensure the Mozilla repo is inside it too.
+if 'dependencyResolutionManagement' in s and 'maven.mozilla.org' not in s.split('rootProject.name')[0]:
+    s=s.replace('    repositories {\n        google()\n        mavenCentral()\n', '    repositories {\n        google()\n        mavenCentral()\n        maven { url = uri("https://maven.mozilla.org/maven2/") }\n',1)
 settings.write_text(s)
 g=gradle.read_text()
 g=re.sub(r'\s*implementation\("androidx\.browser:browser:[^\"]+"\)\n','\n',g)
-# GeckoView is published as geckoview-${channel}, not plain geckoview.
-g=re.sub(r'org\.mozilla\.geckoview:geckoview:[^\"]+','org.mozilla.geckoview:geckoview:155.0.20260903215306',g)
-if 'org.mozilla.geckoview:geckoview:' not in g:
-    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:155.0.20260903215306")\n',1)
-# GeckoView requires Java 17 compatibility.
+# GeckoView is published as geckoview-${channel}.
+g=re.sub(r'org\.mozilla\.geckoview:geckoview:[^\"]+','org.mozilla.geckoview:geckoview-155.0.20260903215306:155.0.20260903215306',g)
+if 'org.mozilla.geckoview:geckoview-155.0.20260903215306:' not in g:
+    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview-155.0.20260903215306:155.0.20260903215306")\n',1)
 if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
     g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
 gradle.write_text(g)
