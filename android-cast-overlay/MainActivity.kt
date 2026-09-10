@@ -1,18 +1,12 @@
 package io.github.ddagunts.screencast.ui
 
 import android.annotation.SuppressLint
-import android.content.Intent
+import android.app.Activity
 import android.graphics.Color
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.Gravity
 import android.view.View
 import android.webkit.CookieManager
-import android.webkit.RenderProcessGoneDetail
-import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -23,9 +17,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.ComponentActivity
-import io.github.ddagunts.screencast.CricketHubCastActivity
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -33,245 +25,214 @@ class MainActivity : ComponentActivity() {
     private lateinit var statusTitle: TextView
     private lateinit var statusDetail: TextView
     private lateinit var progress: ProgressBar
-    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var retryButton: Button
+    private lateinit var browserButton: Button
+
     private val homeUrl = "https://crickethub-vibe-coder22.vercel.app/"
-    private var pageCommitted = false
-    private var pageVerified = false
-    private var errorButtonsAdded = false
-    private var softwareFallbackUsed = false
+    private var pageStarted = false
+    private var pageFinished = false
+    private var fatalShown = false
 
-    private val renderTimeout = Runnable {
-        if (!pageVerified && !isFinishing) {
-            if (!softwareFallbackUsed) {
-                softwareFallbackUsed = true
-                showLoading("Optimizing display…", "Restarting the page with a compatibility renderer")
-                webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                webView.reload()
-                return@Runnable
-            }
-            showError(
-                if (pageCommitted) "CricketHub loaded but stayed blank" else "CricketHub is taking too long",
-                if (pageCommitted) "The Android web renderer produced a blank page. Tap Retry to reload CricketHub." else "The Android web renderer did not finish loading. Tap Retry or open CricketHub in your browser."
-            )
-        }
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.rgb(5, 14, 25)
         window.navigationBarColor = Color.rgb(5, 14, 25)
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 14, 25)) }
+        setContentView(root)
+
+        // Keep the native UI visible until WebView has definitely reported a successful
+        // main-frame load. This avoids ever presenting a silent black screen.
+        statusOverlay = createStatusOverlay()
+        root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
 
         try {
-            webView = WebView(this)
-            configureWebView()
-            // WebView first, native overlay second. This prevents a hardware WebView surface
-            // from visually covering the loading/error UI.
-            root.addView(webView, FrameLayout.LayoutParams(-1, -1))
-            statusOverlay = createStatusOverlay()
-            root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
+            webView = WebView(applicationContext).also { view ->
+                // Re-parent the WebView onto the Activity after constructing it with the
+                // application context. This avoids device-specific Activity/WebView surface
+                // initialization failures while retaining the Activity lifecycle.
+                configureWebView(view)
+            }
+            root.addView(webView, 0, FrameLayout.LayoutParams(-1, -1))
             statusOverlay.bringToFront()
+            loadHome()
         } catch (t: Throwable) {
-            statusOverlay = createStatusOverlay()
-            root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
-            showFatalError()
+            showFatalError("CricketHub could not start", "Android WebView failed to initialize. Use Retry to try again.")
         }
-
-        setContentView(root)
-        if (::webView.isInitialized) loadHome()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun configureWebView() {
-        webView.setBackgroundColor(Color.rgb(5, 14, 25))
-        // Do not force a hardware layer. Android's WebView already uses hardware
-        // acceleration when available, while forcing a layer can produce a black surface
-        // on some phone/WebView combinations.
-        webView.visibility = View.VISIBLE
-        webView.settings.apply {
+    private fun configureWebView(view: WebView) {
+        view.setBackgroundColor(Color.rgb(5, 14, 25))
+        view.visibility = View.VISIBLE
+        view.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            javaScriptCanOpenWindowsAutomatically = true
-            setSupportMultipleWindows(false)
-            loadWithOverviewMode = false
-            useWideViewPort = true
-            builtInZoomControls = false
-            displayZoomControls = false
-            cacheMode = WebSettings.LOAD_DEFAULT
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            loadsImagesAutomatically = true
+            blockNetworkImage = false
             allowFileAccess = false
             allowContentAccess = true
-            userAgentString = "$userAgentString CricketHubAndroid/1.3"
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            cacheMode = WebSettings.LOAD_DEFAULT
+            userAgentString = "$userAgentString CricketHubAndroid/1.4"
         }
         CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
-        webView.webChromeClient = WebChromeClient()
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                pageCommitted = false
-                pageVerified = false
-                showLoading("Opening CricketHub…", "Connecting securely to CricketHub")
-                armRenderTimeout()
+        CookieManager.getInstance().setAcceptThirdPartyCookies(view, true)
+
+        view.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest): Boolean {
+                return handleUrl(request.url.toString())
             }
 
-            override fun onPageCommitVisible(view: WebView, url: String) {
-                pageCommitted = true
-                scheduleVerification(400)
+            override fun shouldOverrideUrlLoading(v: WebView, url: String): Boolean {
+                return handleUrl(url)
             }
 
-            override fun onPageFinished(view: WebView, url: String) {
-                pageCommitted = true
-                scheduleVerification(400)
+            override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                pageStarted = true
+                pageFinished = false
+                showLoading("Starting CricketHub…", "Loading CricketHub")
             }
 
-            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) showError("CricketHub couldn't load", error.description?.toString() ?: "Network error")
+            override fun onPageFinished(v: WebView, url: String) {
+                pageFinished = true
+                // Do not use DOM-size heuristics: a perfectly valid Next.js page can be
+                // visually rendered before/after its DOM reaches an arbitrary size.
+                statusOverlay.postDelayed({
+                    if (!fatalShown && pageFinished && !isFinishing) {
+                        statusOverlay.visibility = View.GONE
+                        v.visibility = View.VISIBLE
+                        v.invalidate()
+                    }
+                }, 500)
             }
 
-            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: android.webkit.WebResourceResponse) {
-                if (request.isForMainFrame && errorResponse.statusCode >= 400) showError("CricketHub returned an error", "HTTP ${errorResponse.statusCode}")
+            override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
+                if (request.isForMainFrame) {
+                    showError("CricketHub could not load", error.description?.toString() ?: "Network error while loading CricketHub.")
+                }
             }
-
-            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                showError("Android WebView stopped", "The page renderer stopped unexpectedly. Tap Retry to restart it safely.")
-                return true
-            }
-
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = handleUrl(request.url.toString())
-
-            @Deprecated("Deprecated by Android")
-            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = handleUrl(url)
         }
+    }
+
+    private fun handleUrl(url: String): Boolean {
+        if (url.startsWith("crickethub://cast", ignoreCase = true)) {
+            try {
+                val intent = android.content.Intent(this, Class.forName("io.github.ddagunts.screencast.ui.CricketHubCastActivity"))
+                intent.data = Uri.parse(url)
+                startActivity(intent)
+            } catch (_: Throwable) {
+                showError("Cast helper unavailable", "The integrated Cast feature could not be opened in this build.")
+            }
+            return true
+        }
+        return false
     }
 
     private fun loadHome() {
-        pageCommitted = false
-        pageVerified = false
-        softwareFallbackUsed = false
-        errorButtonsAdded = false
-        removeErrorButtons()
-        webView.setLayerType(View.LAYER_TYPE_NONE, null)
-        showLoading("Starting CricketHub…", "Loading the full CricketHub website")
+        fatalShown = false
+        pageStarted = false
+        pageFinished = false
+        retryButton.visibility = View.GONE
+        browserButton.visibility = View.GONE
+        progress.visibility = View.VISIBLE
+        statusOverlay.visibility = View.VISIBLE
+        showLoading("Starting CricketHub…", "Loading CricketHub")
         webView.loadUrl(homeUrl)
-        armRenderTimeout()
-    }
-
-    private fun scheduleVerification(delay: Long) {
-        handler.postDelayed({ verifyRenderedPage() }, delay)
-    }
-
-    private fun armRenderTimeout() {
-        handler.removeCallbacks(renderTimeout)
-        handler.postDelayed(renderTimeout, 12000)
-    }
-
-    private fun verifyRenderedPage() {
-        if (!::webView.isInitialized || isFinishing || pageVerified) return
-        webView.evaluateJavascript("(function(){var b=document.body;return JSON.stringify({ready:document.readyState,text:b?b.innerText.length:0,html:b?b.innerHTML.length:0,title:document.title||''});})()") { raw ->
-            val value = raw.orEmpty()
-            val text = Regex("\\\"text\\\":(\\d+)").find(value)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            val html = Regex("\\\"html\\\":(\\d+)").find(value)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-            if (text >= 40 || html >= 500) {
-                pageVerified = true
-                handler.removeCallbacks(renderTimeout)
-                statusOverlay.visibility = View.GONE
-                webView.visibility = View.VISIBLE
-            } else if (pageCommitted) {
-                handler.postDelayed({ verifyRenderedPage() }, 800)
-            }
-        }
     }
 
     private fun createStatusOverlay(): LinearLayout {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            gravity = android.view.Gravity.CENTER
+            setPadding(40, 40, 40, 40)
             setBackgroundColor(Color.rgb(5, 14, 25))
-            setPadding(dp(28), dp(28), dp(28), dp(28))
         }
-        val logo = TextView(this).apply { text = "🏏"; textSize = 58f; gravity = Gravity.CENTER }
-        val title = TextView(this).apply { text = "Starting CricketHub"; textSize = 28f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE); gravity = Gravity.CENTER }
-        statusTitle = title
-        val detail = TextView(this).apply { text = "Loading the full CricketHub website"; textSize = 14f; setTextColor(Color.rgb(148, 163, 184)); gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(18)) }
-        statusDetail = detail
-        progress = ProgressBar(this)
-        box.addView(logo, lp()); box.addView(title, lp()); box.addView(detail, lp()); box.addView(progress, lp())
+        val logo = TextView(this).apply {
+            text = "🏏"
+            textSize = 52f
+            gravity = android.view.Gravity.CENTER
+        }
+        statusTitle = TextView(this).apply {
+            textSize = 24f
+            setTextColor(Color.WHITE)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER
+        }
+        statusDetail = TextView(this).apply {
+            textSize = 14f
+            setTextColor(Color.rgb(148, 163, 184))
+            gravity = android.view.Gravity.CENTER
+            setPadding(0, 10, 0, 24)
+        }
+        progress = ProgressBar(this).apply { isIndeterminate = true }
+        retryButton = Button(this).apply {
+            text = "Retry"
+            setOnClickListener { loadHome() }
+            visibility = View.GONE
+        }
+        browserButton = Button(this).apply {
+            text = "Open in browser"
+            setOnClickListener {
+                try { startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(homeUrl))) } catch (_: Throwable) {}
+            }
+            visibility = View.GONE
+        }
+        box.addView(logo, LinearLayout.LayoutParams(-1, -2))
+        box.addView(statusTitle, LinearLayout.LayoutParams(-1, -2))
+        box.addView(statusDetail, LinearLayout.LayoutParams(-1, -2))
+        box.addView(progress, LinearLayout.LayoutParams(-2, -2))
+        box.addView(retryButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 18 })
+        box.addView(browserButton, LinearLayout.LayoutParams(-1, -2))
         return box
     }
 
     private fun showLoading(title: String, detail: String) {
+        fatalShown = false
         statusTitle.text = title
         statusDetail.text = detail
         progress.visibility = View.VISIBLE
+        retryButton.visibility = View.GONE
+        browserButton.visibility = View.GONE
         statusOverlay.visibility = View.VISIBLE
         statusOverlay.bringToFront()
     }
 
     private fun showError(title: String, detail: String) {
-        handler.removeCallbacks(renderTimeout)
-        progress.visibility = View.GONE
+        if (isFinishing) return
+        fatalShown = true
         statusTitle.text = title
         statusDetail.text = detail
+        progress.visibility = View.GONE
+        retryButton.visibility = View.VISIBLE
+        browserButton.visibility = View.VISIBLE
         statusOverlay.visibility = View.VISIBLE
         statusOverlay.bringToFront()
-        addErrorButtonsIfNeeded()
     }
 
-    private fun showFatalError() {
+    private fun showFatalError(title: String, detail: String) {
+        fatalShown = true
+        statusTitle.text = title
+        statusDetail.text = detail
         progress.visibility = View.GONE
-        statusTitle.text = "CricketHub couldn't start"
-        statusDetail.text = "Android WebView could not be created. You can still open CricketHub in your browser."
+        retryButton.visibility = View.VISIBLE
+        browserButton.visibility = View.VISIBLE
         statusOverlay.visibility = View.VISIBLE
-        addErrorButtonsIfNeeded()
+        statusOverlay.bringToFront()
     }
 
-    private fun addErrorButtonsIfNeeded() {
-        if (errorButtonsAdded) return
-        errorButtonsAdded = true
-        val retry = Button(this).apply {
-            text = "Retry"
-            isAllCaps = false
-            setTextColor(Color.rgb(5, 14, 25))
-            setBackgroundColor(Color.rgb(34, 197, 94))
-            setOnClickListener { loadHome() }
-        }
-        val browser = Button(this).apply { text = "Open in browser"; isAllCaps = false; setOnClickListener { openBrowser() } }
-        statusOverlay.addView(retry, LinearLayout.LayoutParams(dp(220), dp(52)).apply { topMargin = dp(18) })
-        statusOverlay.addView(browser, LinearLayout.LayoutParams(dp(220), dp(52)).apply { topMargin = dp(8) })
+    override fun onBackPressed() {
+        if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
-
-    private fun removeErrorButtons() { while (statusOverlay.childCount > 4) statusOverlay.removeViewAt(statusOverlay.childCount - 1) }
-
-    private fun openBrowser() {
-        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(homeUrl))) }
-            .onFailure { Toast.makeText(this, "No browser is available", Toast.LENGTH_SHORT).show() }
-    }
-
-    private fun handleUrl(raw: String): Boolean {
-        val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return false
-        if (uri.scheme.equals("crickethub", true) && uri.host.equals("cast", true)) {
-            val url = uri.getQueryParameter("url").orEmpty()
-            val name = uri.getQueryParameter("name") ?: "CricketHub"
-            if (url.isBlank()) Toast.makeText(this, "No player URL was supplied", Toast.LENGTH_SHORT).show()
-            else startActivity(Intent(this, CricketHubCastActivity::class.java).apply { data = Uri.parse("crickethub://cast?url=${Uri.encode(url)}&name=${Uri.encode(name)}") })
-            return true
-        }
-        return !(uri.scheme.equals("http", true) || uri.scheme.equals("https", true))
-    }
-
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
-    private fun lp() = LinearLayout.LayoutParams(-1, LinearLayout.LayoutParams.WRAP_CONTENT)
-
-    @Deprecated("Deprecated by Android")
-    override fun onBackPressed() { if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed() }
 
     override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null)
-        if (::webView.isInitialized) { webView.stopLoading(); webView.destroy() }
+        if (::webView.isInitialized) {
+            webView.stopLoading()
+            webView.webViewClient = null
+            webView.destroy()
+        }
         super.onDestroy()
     }
 }
