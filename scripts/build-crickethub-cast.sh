@@ -18,12 +18,14 @@ import sys
 manifest = Path(sys.argv[1])
 strings = Path(sys.argv[2])
 s = manifest.read_text()
-# Guarantee network access even if the upstream project changes its manifest.
 if 'android.permission.INTERNET' not in s:
     s = s.replace('<application', '<uses-permission android:name="android.permission.INTERNET" />\n\n    <application', 1)
-# Use the custom CricketHub icon instead of the upstream ScreenCast icon.
 s = s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/ic_crickethub"')
 s = s.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/ic_crickethub"')
+# Explicit hardware acceleration avoids a black WebView surface on devices where
+# the inherited upstream application configuration is conservative.
+if 'android:hardwareAccelerated=' not in s:
+    s = s.replace('<application', '<application android:hardwareAccelerated="true"', 1)
 needle = '''        <activity\n            android:name=".ui.MainActivity"'''
 activity = '''        <activity\n            android:name=".CricketHubCastActivity"\n            android:exported="true"\n            android:theme="@style/Theme.ScreenCast"\n            android:excludeFromRecents="true">\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="crickethub" android:host="cast" />\n            </intent-filter>\n        </activity>\n\n'''
 if '.CricketHubCastActivity' not in s:
