@@ -18,6 +18,8 @@ s = p.read_text()
 needle = '''        <activity\n            android:name=".ui.MainActivity"'''
 activity = '''        <activity\n            android:name=".CricketHubCastActivity"\n            android:exported="true"\n            android:theme="@style/Theme.ScreenCast"\n            android:excludeFromRecents="true">\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="crickethub" android:host="cast" />\n            </intent-filter>\n        </activity>\n\n'''
 if '.CricketHubCastActivity' not in s:
+    if needle not in s:
+        raise SystemExit('CricketHubCastActivity manifest insertion point not found')
     s = s.replace(needle, activity + needle, 1)
 p.write_text(s)
 PY
@@ -27,12 +29,14 @@ from pathlib import Path
 import sys
 p = Path(sys.argv[1])
 s = p.read_text()
-s = s.replace('import android.content.Intent\n', 'import android.content.Intent\nimport android.net.Uri\n')
-old = '''            startForegroundService(svc)\n        } else {'''
-new = '''            startForegroundService(svc)\n            // Return the player to the foreground after the system consent dialog.\n            // MediaProjection then captures the actual CricketHub player surface.\n            intent.getStringExtra(WebRtcForegroundService.EXTRA_PLAYER_URL)?.let { url ->\n                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }\n            }\n        } else {'''
-if old not in s:
-    raise SystemExit('projection patch target not found')
-s = s.replace(old, new, 1)
+if 'import android.net.Uri\n' not in s:
+    s = s.replace('import android.content.Intent\n', 'import android.content.Intent\nimport android.net.Uri\n', 1)
+marker = '            startForegroundService(svc)\n'
+insert = '''            startForegroundService(svc)\n            // Put the CricketHub player back in the foreground after consent so\n            // MediaProjection captures the actual player surface, not the picker.\n            intent.getStringExtra(WebRtcForegroundService.EXTRA_PLAYER_URL)?.let { url ->\n                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }\n            }\n'''
+if 'EXTRA_PLAYER_URL)?.let' not in s:
+    if marker not in s:
+        raise SystemExit('WebRTC foreground-service start point not found')
+    s = s.replace(marker, insert, 1)
 p.write_text(s)
 PY
 
