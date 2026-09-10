@@ -1,7 +1,6 @@
 package io.github.ddagunts.screencast.ui
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
@@ -38,6 +37,11 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = Color.rgb(5, 14, 25)
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 14, 25)) }
+        progress = ProgressBar(this).apply {
+            isIndeterminate = true
+            setVisibility(View.VISIBLE)
+        }
+
         webView = WebView(this).apply {
             setBackgroundColor(Color.rgb(5, 14, 25))
             settings.apply {
@@ -68,11 +72,11 @@ class MainActivity : ComponentActivity() {
                 override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = handleUrl(url)
 
                 override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                    progress.visibility = View.VISIBLE
+                    progress.setVisibility(View.VISIBLE)
                 }
 
                 override fun onPageFinished(view: WebView, url: String) {
-                    progress.visibility = View.GONE
+                    progress.setVisibility(View.GONE)
                 }
 
                 override fun onReceivedError(
@@ -80,15 +84,11 @@ class MainActivity : ComponentActivity() {
                     request: WebResourceRequest,
                     error: android.webkit.WebResourceError,
                 ) {
-                    if (request.isForMainFrame) progress.visibility = View.GONE
+                    if (request.isForMainFrame) progress.setVisibility(View.GONE)
                 }
             }
         }
 
-        progress = ProgressBar(this).apply {
-            isIndeterminate = true
-            visibility = View.VISIBLE
-        }
         root.addView(webView, FrameLayout.LayoutParams(-1, -1))
         root.addView(progress, FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER))
 
@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
             textSize = 15f
             gravity = Gravity.CENTER
             setBackgroundColor(Color.rgb(5, 14, 25))
-            visibility = View.GONE
+            setVisibility(View.GONE)
             setOnClickListener { webView.reload() }
         }
         root.addView(offline, FrameLayout.LayoutParams(-1, -1))
@@ -122,13 +122,11 @@ class MainActivity : ComponentActivity() {
             }
             return true
         }
-        if (uri.scheme == "http" || uri.scheme == "https") {
-            // Keep CricketHub and embedded player content inside the app.
-            return false
-        }
+        if (uri.scheme == "http" || uri.scheme == "https") return false
         return true
     }
 
+    @Deprecated("Deprecated in API 33")
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
     }
