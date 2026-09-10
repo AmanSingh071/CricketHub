@@ -5,13 +5,15 @@ WORK="${RUNNER_TEMP:-/tmp}/crickethub-screencast"
 rm -rf "$WORK"
 git clone --depth 1 https://github.com/ddagunts/ScreenCast.git "$WORK"
 
-# GeckoView already packages org.webrtc. The upstream ScreenCast WebRTC sender
-# therefore cannot coexist with GeckoView in one APK. Keep ScreenCast's HLS
-# MediaProjection path, which uses Android MediaCodec and the default Cast
-# receiver and does not require a second WebRTC SDK.
+# CricketHub uses GeckoView for the embedded website and ScreenCast's HLS
+# MediaProjection path for free phone-to-Cast mirroring. Remove every upstream
+# WebRTC sender/UI source so GeckoView is the only org.webrtc provider.
 rm -rf "$WORK/app/src/main/java/io/github/ddagunts/screencast/webrtc"
 rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/WebRtcForegroundService.kt"
 rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/WebRtcProjectionRequestActivity.kt"
+rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/ui/WebRtcScreen.kt"
+rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/ui/WebRtcViewModel.kt"
+rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/ui/SettingsScreen.kt"
 
 mkdir -p "$WORK/app/src/main/java/io/github/ddagunts/screencast" "$WORK/app/src/main/res/drawable"
 cp "$ROOT/android-cast-overlay/CricketHubCastActivity.kt" "$WORK/app/src/main/java/io/github/ddagunts/screencast/CricketHubCastActivity.kt"
@@ -27,10 +29,9 @@ if 'android.permission.INTERNET' not in s:
 s=s.replace('android:icon="@mipmap/ic_launcher"','android:icon="@drawable/ic_crickethub"').replace('android:roundIcon="@mipmap/ic_launcher_round"','android:roundIcon="@drawable/ic_crickethub"')
 if 'android:hardwareAccelerated=' not in s:
     s=s.replace('<application','<application android:hardwareAccelerated="true"',1)
-# Remove upstream WebRTC-only manifest entries because those classes are intentionally excluded.
-s=re.sub(r'\n\s*<!-- WebRTC trampoline / service\..*?</service>\n', '\n', s, flags=re.S)
-s=s.replace('''        <activity\n            android:name=".WebRtcProjectionRequestActivity"\n            android:theme="@style/Theme.Transparent"\n            android:excludeFromRecents="true"\n            android:taskAffinity=""\n            android:exported="false" />\n\n''','')
-s=s.replace('''        <service\n            android:name=".WebRtcForegroundService"\n            android:foregroundServiceType="mediaProjection"\n            android:exported="false" />\n''','')
+# Remove any upstream WebRTC-only manifest declarations.
+s=re.sub(r'\n\s*<activity\s+android:name="\.WebRtcProjectionRequestActivity".*?</activity>\s*', '\n', s, flags=re.S)
+s=re.sub(r'\n\s*<service\s+android:name="\.WebRtcForegroundService".*?</service>\s*', '\n', s, flags=re.S)
 needle='''        <activity\n            android:name=".ui.MainActivity"'''
 activity='''        <activity\n            android:name=".CricketHubCastActivity"\n            android:exported="true"\n            android:theme="@style/Theme.ScreenCast"\n            android:excludeFromRecents="true">\n            <intent-filter>\n                <action android:name="android.intent.action.VIEW" />\n                <category android:name="android.intent.category.DEFAULT" />\n                <category android:name="android.intent.category.BROWSABLE" />\n                <data android:scheme="crickethub" android:host="cast" />\n            </intent-filter>\n        </activity>\n\n'''
 if '.CricketHubCastActivity' not in s:
@@ -49,14 +50,13 @@ if 'https://maven.mozilla.org/maven2/' not in s:
     s=s.replace('dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n', 'dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n        maven { url = uri("https://maven.mozilla.org/maven2/") }\n',1)
 settings.write_text(s)
 g=gradle.read_text()
-# GeckoView 155 requires compileSdk 37+ and bundles its own org.webrtc classes.
 g=g.replace('compileSdk = 36','compileSdk = 37')
 g=g.replace('implementation(libs.webrtc.sdk.android)','')
-g=re.sub(r'\n\s*// WebRTC mode.*?(?=\n\s*// Ktor uses SLF4J)', '\n', g, flags=re.S)
-g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:155\.0\.20260903215306','org.mozilla.geckoview:geckoview:155.0.20260903215306',g)
-g=re.sub(r'org\.mozilla\.geckoview:geckoview:[^\"]+','org.mozilla.geckoview:geckoview:155.0.20260903215306',g)
+g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:[^\"\']+', 'org.mozilla.geckoview:geckoview:155.0.20260903215306', g)
 if 'org.mozilla.geckoview:geckoview:155.0.20260903215306' not in g:
     g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:155.0.20260903215306")\n',1)
+if 'compileSdkExtension = 1' not in g:
+    g=g.replace('compileSdk = 37','compileSdk = 37\n    compileSdkExtension = 1',1)
 if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
     g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
 gradle.write_text(g)
