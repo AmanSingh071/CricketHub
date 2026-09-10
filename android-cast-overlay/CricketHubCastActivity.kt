@@ -18,7 +18,6 @@ import androidx.lifecycle.lifecycleScope
 import io.github.ddagunts.screencast.cast.CastDevice
 import io.github.ddagunts.screencast.cast.CastDiscovery
 import io.github.ddagunts.screencast.cast.CHROMECAST_DEFAULT_PORT
-import io.github.ddagunts.screencast.webrtc.DEFAULT_WEBRTC_APP_ID
 import kotlinx.coroutines.launch
 
 /** Phone-only CricketHub casting screen. TV requires no CricketHub software. */
@@ -76,7 +75,7 @@ class CricketHubCastActivity : ComponentActivity() {
         }
 
         val info = TextView(this).apply {
-            text = "📱  Phone → 📺 TV\n\nYour phone will show the player first. Then Android will ask for screen-capture permission.\n\nKeep both devices on the same Wi-Fi."
+            text = "📱  Phone → 📺 TV\n\nSelect your TV, then Android will ask for screen-capture permission. The TV needs no CricketHub app or website.\n\nKeep both devices on the same Wi-Fi."
             textSize = 14f
             setTextColor(Color.rgb(226,232,240))
             setPadding(dp(16), dp(16), dp(16), dp(16))
@@ -136,19 +135,25 @@ class CricketHubCastActivity : ComponentActivity() {
     }
 
     private fun castTo(device: CastDevice) {
-        status.text = "Opening ${device.name}…"
+        status.text = "Preparing ${device.name}…"
         list.isEnabled = false
+        // Keep the channel player in the foreground while the MediaProjection
+        // permission dialog is requested. The HLS sender captures the actual
+        // phone display, so the external iframe remains untouched.
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(channelUrl))) }
         android.os.Handler(mainLooper).postDelayed({
-            startActivity(Intent(this, WebRtcProjectionRequestActivity::class.java).apply {
-                putExtra(WebRtcForegroundService.EXTRA_DEVICE_NAME, device.name)
-                putExtra(WebRtcForegroundService.EXTRA_DEVICE_HOST, device.host)
-                putExtra(WebRtcForegroundService.EXTRA_DEVICE_PORT, if (device.port > 0) device.port else CHROMECAST_DEFAULT_PORT)
-                putExtra(WebRtcForegroundService.EXTRA_APP_ID, DEFAULT_WEBRTC_APP_ID)
+            startActivity(Intent(this, MediaProjectionRequestActivity::class.java).apply {
+                putExtra(CastForegroundService.EXTRA_DEVICE_NAME, device.name)
+                putExtra(CastForegroundService.EXTRA_DEVICE_HOST, device.host)
+                putExtra(CastForegroundService.EXTRA_DEVICE_PORT, if (device.port > 0) device.port else CHROMECAST_DEFAULT_PORT)
+                putExtra(CastForegroundService.EXTRA_SEGMENT_DURATION, 1.0)
+                putExtra(CastForegroundService.EXTRA_WINDOW_SIZE, 6)
+                putExtra(CastForegroundService.EXTRA_LIVE_EDGE, 1.5)
+                putExtra(CastForegroundService.EXTRA_RESOLUTION, "HD")
                 putExtra("crickethub_player_url", channelUrl)
             })
             finish()
-        }, 650)
+        }, 500)
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
