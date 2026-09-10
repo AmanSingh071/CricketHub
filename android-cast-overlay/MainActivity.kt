@@ -60,5 +60,5 @@ class MainActivity : ComponentActivity() {
     private fun showError(t:String,d:String){if(isFinishing)return;fatalShown=true;statusTitle.text=t;statusDetail.text=d;progress.visibility=View.GONE;retryButton.visibility=View.VISIBLE;browserButton.visibility=View.VISIBLE;statusOverlay.visibility=View.VISIBLE;statusOverlay.bringToFront()}
     private fun showFatalError(t:String,d:String){fatalShown=true;statusTitle.text=t;statusDetail.text=d;progress.visibility=View.GONE;retryButton.visibility=View.VISIBLE;browserButton.visibility=View.VISIBLE;statusOverlay.visibility=View.VISIBLE;statusOverlay.bringToFront()}
     override fun onBackPressed(){if(::webView.isInitialized&&webView.canGoBack())webView.goBack()else super.onBackPressed()}
-    override fun onDestroy(){handler.removeCallbacksAndMessages(null);if(::webView.isInitialized){webView.stopLoading();webView.webViewClient=null;webView.destroy()};super.onDestroy()}
+    override fun onDestroy(){handler.removeCallbacksAndMessages(null);if(::webView.isInitialized){webView.stopLoading();webView.destroy()};super.onDestroy()}
 }
