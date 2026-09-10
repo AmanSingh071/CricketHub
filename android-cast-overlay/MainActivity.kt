@@ -39,6 +39,15 @@ class MainActivity : ComponentActivity() {
     private var pageVerified = false
     private var errorButtonsAdded = false
 
+    private val renderTimeout = Runnable {
+        if (!pageVerified && !isFinishing) {
+            showError(
+                if (pageCommitted) "CricketHub loaded but stayed blank" else "CricketHub is taking too long",
+                if (pageCommitted) "Android WebView received the page but produced no visible document. Tap Retry or open the site in your browser." else "The Android web renderer did not finish loading. Tap Retry or open the site in your browser."
+            )
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,15 +149,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun armRenderTimeout() {
-        handler.removeCallbacks(RENDER_TIMEOUT)
-        handler.postDelayed({
-            if (!pageVerified && !isFinishing) {
-                showError(
-                    if (pageCommitted) "CricketHub loaded but stayed blank" else "CricketHub is taking too long",
-                    if (pageCommitted) "Android WebView received the page but produced no visible document. Tap Retry or open the site in your browser." else "The Android web renderer did not finish loading. Tap Retry or open the site in your browser."
-                )
-            }
-        }, 12000)
+        handler.removeCallbacks(renderTimeout)
+        handler.postDelayed(renderTimeout, 12000)
     }
 
     private fun verifyRenderedPage() {
@@ -159,7 +161,7 @@ class MainActivity : ComponentActivity() {
             val html = Regex("\\\"html\\\":(\\d+)").find(value)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             if (text >= 40 || html >= 500) {
                 pageVerified = true
-                handler.removeCallbacks(RENDER_TIMEOUT)
+                handler.removeCallbacks(renderTimeout)
                 statusOverlay.visibility = View.GONE
                 webView.visibility = View.VISIBLE
             } else if (pageCommitted) {
@@ -194,7 +196,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showError(title: String, detail: String) {
-        handler.removeCallbacks(RENDER_TIMEOUT)
+        handler.removeCallbacks(renderTimeout)
         progress.visibility = View.GONE
         statusTitle.text = title
         statusDetail.text = detail
@@ -256,6 +258,4 @@ class MainActivity : ComponentActivity() {
         if (::webView.isInitialized) { webView.stopLoading(); webView.destroy() }
         super.onDestroy()
     }
-
-    companion object { private val RENDER_TIMEOUT = Any() }
 }
