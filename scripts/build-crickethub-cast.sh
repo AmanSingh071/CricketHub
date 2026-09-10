@@ -40,6 +40,10 @@ if 'EXTRA_PLAYER_URL)?.let' not in s:
 p.write_text(s)
 PY
 
+# The upstream project keeps the Gradle wrapper inside the cloned project.
+# Run Gradle from that project instead of CricketHub's root checkout.
+chmod +x "$WORK/gradlew"
+cd "$WORK"
 ./gradlew --no-daemon assembleDebug
 mkdir -p "$ROOT/artifacts"
 cp "$WORK/app/build/outputs/apk/debug/app-debug.apk" "$ROOT/artifacts/CricketHub-Cast-debug.apk"
