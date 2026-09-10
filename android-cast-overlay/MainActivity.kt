@@ -34,16 +34,24 @@ class MainActivity : ComponentActivity() {
     private lateinit var statusDetail: TextView
     private lateinit var progress: ProgressBar
     private val handler = Handler(Looper.getMainLooper())
-    private val homeUrl = "https://crickethub-chi.vercel.app/"
+    private val homeUrl = "https://crickethub-vibe-coder22.vercel.app/"
     private var pageCommitted = false
     private var pageVerified = false
     private var errorButtonsAdded = false
+    private var softwareFallbackUsed = false
 
     private val renderTimeout = Runnable {
         if (!pageVerified && !isFinishing) {
+            if (!softwareFallbackUsed) {
+                softwareFallbackUsed = true
+                showLoading("Optimizing display…", "Restarting the page with a compatibility renderer")
+                webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                webView.reload()
+                return@Runnable
+            }
             showError(
                 if (pageCommitted) "CricketHub loaded but stayed blank" else "CricketHub is taking too long",
-                if (pageCommitted) "Android WebView received the page but produced no visible document. Tap Retry or open the site in your browser." else "The Android web renderer did not finish loading. Tap Retry or open the site in your browser."
+                if (pageCommitted) "The Android web renderer produced a blank page. Tap Retry to reload CricketHub." else "The Android web renderer did not finish loading. Tap Retry or open CricketHub in your browser."
             )
         }
     }
@@ -55,15 +63,19 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = Color.rgb(5, 14, 25)
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 14, 25)) }
-        statusOverlay = createStatusOverlay()
-        root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
 
         try {
             webView = WebView(this)
             configureWebView()
+            // WebView first, native overlay second. This prevents a hardware WebView surface
+            // from visually covering the loading/error UI.
             root.addView(webView, FrameLayout.LayoutParams(-1, -1))
+            statusOverlay = createStatusOverlay()
+            root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
             statusOverlay.bringToFront()
         } catch (t: Throwable) {
+            statusOverlay = createStatusOverlay()
+            root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
             showFatalError()
         }
 
@@ -74,7 +86,9 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun configureWebView() {
         webView.setBackgroundColor(Color.rgb(5, 14, 25))
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        // Do not force a hardware layer. Android's WebView already uses hardware
+        // acceleration when available, while forcing a layer can produce a black surface
+        // on some phone/WebView combinations.
         webView.visibility = View.VISIBLE
         webView.settings.apply {
             javaScriptEnabled = true
@@ -91,7 +105,7 @@ class MainActivity : ComponentActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             allowFileAccess = false
             allowContentAccess = true
-            userAgentString = "$userAgentString CricketHubAndroid/1.2"
+            userAgentString = "$userAgentString CricketHubAndroid/1.3"
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
@@ -106,12 +120,12 @@ class MainActivity : ComponentActivity() {
 
             override fun onPageCommitVisible(view: WebView, url: String) {
                 pageCommitted = true
-                scheduleVerification(300)
+                scheduleVerification(400)
             }
 
             override fun onPageFinished(view: WebView, url: String) {
                 pageCommitted = true
-                scheduleVerification(300)
+                scheduleVerification(400)
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -137,8 +151,10 @@ class MainActivity : ComponentActivity() {
     private fun loadHome() {
         pageCommitted = false
         pageVerified = false
+        softwareFallbackUsed = false
         errorButtonsAdded = false
         removeErrorButtons()
+        webView.setLayerType(View.LAYER_TYPE_NONE, null)
         showLoading("Starting CricketHub…", "Loading the full CricketHub website")
         webView.loadUrl(homeUrl)
         armRenderTimeout()
