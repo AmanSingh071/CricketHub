@@ -32,16 +32,14 @@ s = p.read_text()
 if 'import android.net.Uri\n' not in s:
     s = s.replace('import android.content.Intent\n', 'import android.content.Intent\nimport android.net.Uri\n', 1)
 marker = '            startForegroundService(svc)\n'
-insert = '''            startForegroundService(svc)\n            // Put the CricketHub player back in the foreground after consent so\n            // MediaProjection captures the actual player surface, not the picker.\n            intent.getStringExtra(WebRtcForegroundService.EXTRA_PLAYER_URL)?.let { url ->\n                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }\n            }\n'''
-if 'EXTRA_PLAYER_URL)?.let' not in s:
+insert = '''            startForegroundService(svc)\n            // Put the CricketHub player back in the foreground after consent so\n            // MediaProjection captures the actual player surface, not the picker.\n            intent.getStringExtra("crickethub_player_url")?.let { url ->\n                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }\n            }\n'''
+if 'crickethub_player_url' not in s:
     if marker not in s:
         raise SystemExit('WebRTC foreground-service start point not found')
     s = s.replace(marker, insert, 1)
 p.write_text(s)
 PY
 
-# The upstream project keeps the Gradle wrapper inside the cloned project.
-# Run Gradle from that project instead of CricketHub's root checkout.
 chmod +x "$WORK/gradlew"
 cd "$WORK"
 ./gradlew --no-daemon assembleDebug
