@@ -34,8 +34,13 @@ if 'maven.mozilla.org/maven2' not in s:
 settings.write_text(s)
 g=gradle.read_text()
 g=re.sub(r'\s*implementation\("androidx\.browser:browser:[^\"]+"\)\n','\n',g)
+# GeckoView is published as geckoview-${channel}, not plain geckoview.
+g=re.sub(r'org\.mozilla\.geckoview:geckoview:[^\"]+','org.mozilla.geckoview:geckoview:155.0.20260903215306',g)
 if 'org.mozilla.geckoview:geckoview:' not in g:
-    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:157.0.20260909211052")\n',1)
+    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:155.0.20260903215306")\n',1)
+# GeckoView requires Java 17 compatibility.
+if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
+    g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
 gradle.write_text(g)
 PY
 python3 - "$WORK/app/src/main/java/io/github/ddagunts/screencast/WebRtcProjectionRequestActivity.kt" <<'PY'
