@@ -9,17 +9,12 @@ import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 
-/**
- * Proper in-app CricketHub renderer.
- *
- * Uses Mozilla GeckoView instead of Android System WebView. This keeps the
- * entire CricketHub website inside the APK while avoiding the device-specific
- * WebView compositor/surface problem that caused the previous black screen.
- */
+/** Proper in-app CricketHub renderer using Mozilla GeckoView. */
 class MainActivity : ComponentActivity() {
     private val homeUrl = "https://crickethub-vibe-coder22.vercel.app/"
     private lateinit var geckoView: GeckoView
@@ -36,12 +31,8 @@ class MainActivity : ComponentActivity() {
         val root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 14, 25)) }
         geckoView = GeckoView(this)
         root.addView(geckoView, FrameLayout.LayoutParams(-1, -1))
-
         loading = ProgressBar(this).apply { isIndeterminate = true }
-        root.addView(loading, FrameLayout.LayoutParams(72, 72).apply {
-            gravity = android.view.Gravity.CENTER
-        })
-
+        root.addView(loading, FrameLayout.LayoutParams(72, 72).apply { gravity = android.view.Gravity.CENTER })
         errorText = TextView(this).apply {
             text = "CricketHub could not load. Check your internet connection."
             textSize = 15f
@@ -94,11 +85,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onBackPressed() {
-        if (::session.isInitialized && session.canGoBack()) {
-            session.goBack()
-        } else {
-            super.onBackPressed()
-        }
+        if (::session.isInitialized && session.canGoBack()) session.goBack() else super.onBackPressed()
     }
 
     override fun onDestroy() {
