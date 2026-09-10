@@ -1,6 +1,8 @@
 name: Build CricketHub Cast APK
 
 on:
+  push:
+    branches: [cast-free]
   workflow_dispatch:
 
 jobs:
