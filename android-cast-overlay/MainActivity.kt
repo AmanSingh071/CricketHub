@@ -45,21 +45,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.rgb(5, 14, 25)
         window.navigationBarColor = Color.rgb(5, 14, 25)
-
         val root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(5, 14, 25)) }
         setContentView(root)
-
         try {
             webView = WebView(this)
             configureWebView()
             root.addView(webView, FrameLayout.LayoutParams(-1, -1))
-        } catch (t: Throwable) {
+        } catch (_: Throwable) {
             statusOverlay = createStatusOverlay()
             root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
             showFatalError("CricketHub could not start", "Android WebView failed to initialize. Tap Retry to try again.")
             return
         }
-
         statusOverlay = createStatusOverlay()
         root.addView(statusOverlay, FrameLayout.LayoutParams(-1, -1))
         statusOverlay.bringToFront()
@@ -69,7 +66,6 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun configureWebView() {
         webView.setBackgroundColor(Color.rgb(5, 14, 25))
-        webView.visibility = View.VISIBLE
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -85,33 +81,26 @@ class MainActivity : ComponentActivity() {
         }
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
-
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = handleUrl(request.url.toString())
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = handleUrl(url)
-
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 pageFinished = false
                 fatalShown = false
                 showLoading("Starting CricketHub…", "Loading CricketHub")
                 armStartupTimeout()
             }
-
             override fun onPageFinished(view: WebView, url: String) {
                 pageFinished = true
                 handler.removeCallbacks(startupTimeout)
-                // Give Chromium one frame to paint after the main-frame callback. Never run
-                // DOM-size checks and never switch the WebView to software rendering.
                 view.postDelayed({
                     if (!fatalShown && !isFinishing) {
                         statusOverlay.visibility = View.GONE
-                        view.visibility = View.VISIBLE
                         view.requestLayout()
                         view.invalidate()
                     }
                 }, 350)
             }
-
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) {
                     handler.removeCallbacks(startupTimeout)
@@ -157,36 +146,12 @@ class MainActivity : ComponentActivity() {
             setPadding(40, 40, 40, 40)
             setBackgroundColor(Color.rgb(5, 14, 25))
         }
-        val logo = TextView(this).apply {
-            text = "🏏"
-            textSize = 52f
-            gravity = Gravity.CENTER
-        }
-        statusTitle = TextView(this).apply {
-            textSize = 24f
-            setTextColor(Color.WHITE)
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            gravity = Gravity.CENTER
-        }
-        statusDetail = TextView(this).apply {
-            textSize = 14f
-            setTextColor(Color.rgb(148, 163, 184))
-            gravity = Gravity.CENTER
-            setPadding(0, 10, 0, 24)
-        }
+        val logo = TextView(this).apply { text = "🏏"; textSize = 52f; gravity = Gravity.CENTER }
+        statusTitle = TextView(this).apply { textSize = 24f; setTextColor(Color.WHITE); setTypeface(typeface, android.graphics.Typeface.BOLD); gravity = Gravity.CENTER }
+        statusDetail = TextView(this).apply { textSize = 14f; setTextColor(Color.rgb(148, 163, 184)); gravity = Gravity.CENTER; setPadding(0, 10, 0, 24) }
         progress = ProgressBar(this).apply { isIndeterminate = true }
-        retryButton = Button(this).apply {
-            text = "Retry"
-            setOnClickListener { loadHome() }
-            visibility = View.GONE
-        }
-        browserButton = Button(this).apply {
-            text = "Open in browser"
-            setOnClickListener {
-                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(homeUrl))) } catch (_: Throwable) {}
-            }
-            visibility = View.GONE
-        }
+        retryButton = Button(this).apply { text = "Retry"; setOnClickListener { loadHome() }; visibility = View.GONE }
+        browserButton = Button(this).apply { text = "Open in browser"; setOnClickListener { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(homeUrl))) } catch (_: Throwable) {} }; visibility = View.GONE }
         box.addView(logo, LinearLayout.LayoutParams(-1, -2))
         box.addView(statusTitle, LinearLayout.LayoutParams(-1, -2))
         box.addView(statusDetail, LinearLayout.LayoutParams(-1, -2))
@@ -230,17 +195,11 @@ class MainActivity : ComponentActivity() {
         statusOverlay.bringToFront()
     }
 
-    override fun onBackPressed() {
-        if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed()
-    }
+    override fun onBackPressed() { if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed() }
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        if (::webView.isInitialized) {
-            webView.stopLoading()
-            webView.webViewClient = null
-            webView.destroy()
-        }
+        if (::webView.isInitialized) { webView.stopLoading(); webView.webViewClient = null; webView.destroy() }
         super.onDestroy()
     }
 }
