@@ -1,7 +1,6 @@
 <resources>
-    <style name="Theme.CricketHub" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.CricketHub" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowActionModeOverlay">true</item>
         <item name="android:colorAccent">#22c55e</item>
         <item name="android:navigationBarColor">#050b12</item>
         <item name="android:statusBarColor">#050b12</item>
