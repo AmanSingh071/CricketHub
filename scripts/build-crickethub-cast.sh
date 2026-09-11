@@ -56,17 +56,14 @@ from pathlib import Path
 import re,sys
 settings=Path(sys.argv[1]); gradle=Path(sys.argv[2])
 s=settings.read_text()
-if 'https://maven.mozilla.org/maven2/' not in s:
-    s=s.replace('dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n','dependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n        maven { url = uri("https://maven.mozilla.org/maven2/") }\n',1)
+# Keep the build independent of Mozilla/GeckoView: the app now uses the native Android WebView.
+s=s.replace('        maven { url = uri("https://maven.mozilla.org/maven2/") }\n','')
 settings.write_text(s)
 g=gradle.read_text()
-# Pin the known-published GeckoView 155 release. Do not use a latest/nightly value.
-g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:[^"\']+','org.mozilla.geckoview:geckoview:155.0.20260903215306',g)
-if 'org.mozilla.geckoview:geckoview:155.0.20260903215306' not in g:
-    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:155.0.20260903215306")\n',1)
-g=re.sub(r'compileSdk\s*=\s*36(?:\s*\n\s*compileSdkExtension\s*=\s*1)?','compileSdk = 37',g)
-g=re.sub(r'compileSdk\s*=\s*37\s*\n\s*compileSdkExtension\s*=\s*1','compileSdk = 37',g)
+g=re.sub(r'\s*implementation\(["\']org\.mozilla\.geckoview:[^)]*\)\n?','\n',g)
+g=re.sub(r'\s*implementation\(["\']org\.mozilla\.geckoview[^)]*\)\n?','\n',g)
 g=g.replace('implementation(libs.webrtc.sdk.android)','')
+# Keep Java/Kotlin on the same modern toolchain as the upstream project.
 if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
     g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
 gradle.write_text(g)
