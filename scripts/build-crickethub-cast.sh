@@ -5,8 +5,6 @@ WORK="${RUNNER_TEMP:-/tmp}/crickethub-screencast"
 rm -rf "$WORK"
 git clone --depth 1 https://github.com/ddagunts/ScreenCast.git "$WORK"
 
-# Keep the free MediaProjection/HLS casting path. Remove upstream WebRTC sender
-# code because GeckoView already bundles its own org.webrtc implementation.
 rm -rf "$WORK/app/src/main/java/io/github/ddagunts/screencast/webrtc"
 rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/WebRtcForegroundService.kt"
 rm -f "$WORK/app/src/main/java/io/github/ddagunts/screencast/WebRtcProjectionRequestActivity.kt"
@@ -65,9 +63,9 @@ g=gradle.read_text()
 g=re.sub(r'compileSdk\s*=\s*36(?:\s*\n\s*compileSdkExtension\s*=\s*1)?', 'compileSdk {\n        version = release(37) { minorApiLevel = 1 }\n    }', g)
 g=re.sub(r'compileSdk\s*=\s*37\s*\n\s*compileSdkExtension\s*=\s*1', 'compileSdk {\n        version = release(37) { minorApiLevel = 1 }\n    }', g)
 g=g.replace('implementation(libs.webrtc.sdk.android)','')
-g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:[^\"\']+', 'org.mozilla.geckoview:geckoview:157.0.20260909040912', g)
-if 'org.mozilla.geckoview:geckoview:157.0.20260909040912' not in g:
-    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:157.0.20260909040912")\n',1)
+g=re.sub(r'org\.mozilla\.geckoview:geckoview(?:-[^:]+)?:[^\"\']+', 'org.mozilla.geckoview:geckoview:155.0.20260903215306', g)
+if 'org.mozilla.geckoview:geckoview:155.0.20260903215306' not in g:
+    g=g.replace('dependencies {','dependencies {\n    implementation("org.mozilla.geckoview:geckoview:155.0.20260903215306")\n',1)
 if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
     g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
 gradle.write_text(g)
