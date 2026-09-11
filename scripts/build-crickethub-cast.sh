@@ -56,16 +56,13 @@ from pathlib import Path
 import re,sys
 settings=Path(sys.argv[1]); gradle=Path(sys.argv[2])
 s=settings.read_text()
-# Keep the build independent of Mozilla/GeckoView: the app now uses the native Android WebView.
-s=s.replace('        maven { url = uri("https://maven.mozilla.org/maven2/") }\n','')
+s=re.sub(r'\s*maven\s*\{\s*url\s*=\s*uri\(["\']https://maven\.mozilla\.org/maven2/["\']\)\s*\}\s*','\n',s)
 settings.write_text(s)
 g=gradle.read_text()
-g=re.sub(r'\s*implementation\(["\']org\.mozilla\.geckoview:[^)]*\)\n?','\n',g)
-g=re.sub(r'\s*implementation\(["\']org\.mozilla\.geckoview[^)]*\)\n?','\n',g)
+g=re.sub(r'(?m)^\s*implementation\(["\']org\.mozilla\.geckoview:[^\n]+\)\s*\n?','',g)
+g=re.sub(r'(?m)^\s*implementation\(["\']org\.mozilla\.geckoview[^\n]+\)\s*\n?','',g)
 g=g.replace('implementation(libs.webrtc.sdk.android)','')
-# Keep Java/Kotlin on the same modern toolchain as the upstream project.
-if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
-    g=g.replace('android {','android {\n    compileOptions {\n        sourceCompatibility = JavaVersion.VERSION_17\n        targetCompatibility = JavaVersion.VERSION_17\n    }',1)
+g=re.sub(r'(?m)^\s*compileOptions\s*\{.*?^\s*\}\s*','',g,flags=re.S)
 gradle.write_text(g)
 PY
 
