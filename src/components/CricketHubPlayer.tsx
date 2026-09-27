@@ -94,7 +94,6 @@ export default function CricketHubPlayer({src,title}:Props){
     setVol(next);
   };
   const reloadProvider=()=>{if(!controllable){setIframeKey(x=>x+1);wake()}};
-  const openProvider=()=>{window.open(src,"_blank","noopener,noreferrer")};
   const copyProvider=async()=>{try{await navigator.clipboard.writeText(src);setCopied(true);window.setTimeout(()=>setCopied(false),1600)}catch{}};
   const send=(emoji:string)=>{
     setReaction(emoji);const id=Date.now()+Math.random();
@@ -132,7 +131,7 @@ export default function CricketHubPlayer({src,title}:Props){
         if(type==="hls"){
           await loadScript(HLS_JS);if(dead)return;
           if(window.Hls?.isSupported()){
-            const h=new window.Hls({enableWorker:true,lowLatencyMode:true,maxBufferLength:30});
+            const h=new window.Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:45,maxMaxBufferLength:90,backBufferLength:30,maxBufferHole:0.5,highBufferWatchdogPeriod:2,nudgeOffset:0.1,nudgeMaxRetry:5,liveSyncDurationCount:4});
             hls.current=h;h.loadSource(src);h.attachMedia(v);
             h.on(window.Hls.Events.MANIFEST_PARSED,()=>{
               const next=(h.levels||[]).map((level:any,index:number)=>({
@@ -150,7 +149,12 @@ export default function CricketHubPlayer({src,title}:Props){
                 setQuality(level?.height?`${level.height}p`:d.level===-1?"Auto":`Level ${d.level+1}`);
               }
             });
-            h.on(window.Hls.Events.ERROR,(_:any,d:any)=>{if(d?.fatal)setError("Stream playback error — refresh and try again.");});
+            h.on(window.Hls.Events.ERROR,(_:any,d:any)=>{
+              if(!d?.fatal)return;
+              if(d.type===window.Hls.ErrorTypes?.NETWORK_ERROR){setError("Network hiccup — reconnecting…");h.startLoad();}
+              else if(d.type===window.Hls.ErrorTypes?.MEDIA_ERROR){setError("Recovering video decoder…");h.recoverMediaError();}
+              else{setError("Stream playback error — refresh and try again.");h.destroy();}
+            });
           }else v.src=src;
         }else v.src=src;
         const loaded=()=>setDuration(v.duration||0),time=()=>setCurrent(v.currentTime||0),prog=()=>{try{setBuffered(v.buffered.length?v.buffered.end(v.buffered.length-1):0)}catch{}};
@@ -179,7 +183,6 @@ export default function CricketHubPlayer({src,title}:Props){
       else if(k==="f"){e.preventDefault();void full()}
       else if(k==="t"){e.preventDefault();setTheater((x)=>!x)}
       else if(k==="r"&&!controllable){e.preventDefault();reloadProvider()}
-      else if(k==="o"&&!controllable){e.preventDefault();openProvider()}
       else if(e.key==="Home"||e.key==="0"){e.preventDefault();if(controllable&&media.current){media.current.currentTime=0;wake()}}
       else if(e.key==="End"){e.preventDefault();if(controllable&&media.current&&duration){media.current.currentTime=duration;wake()}}
       else if(k===","&&controllable){e.preventDefault();changeSpeed(Math.max(.5,Number((speed-.25).toFixed(2))))}
@@ -203,14 +206,14 @@ export default function CricketHubPlayer({src,title}:Props){
     <div className="ch-player__ambient"/>
     <header className="ch-player__header">
       <div className="ch-player__title"><div className="ch-player__live"><span/> LIVE <i>•</i> CRICKETHUB</div><strong>{title}</strong></div>
-      <div className="ch-player__header-actions"><button onClick={()=>setTheater((x)=>!x)} title="Theater">▣</button>{!controllable&&<><button onClick={reloadProvider} title="Reload provider">↻</button><button onClick={openProvider} title="Open provider">↗</button></>}<button onClick={()=>void full()} title="Fullscreen">⛶</button></div>
+      <div className="ch-player__header-actions"><button onClick={()=>setTheater((x)=>!x)} title="Theater">▣</button>{!controllable&&<><button onClick={reloadProvider} title="Reload provider">↻</button></>}<button onClick={()=>void full()} title="Fullscreen">⛶</button></div>
     </header>
     <div className="ch-player__stage" onDoubleClick={(e)=>{
       if((e.target as HTMLElement).closest(".ch-player__controls"))return;
       if(controllable){const r=e.currentTarget.getBoundingClientRect();seek(e.clientX<r.left+r.width/2?-10:10);}
     }}>
       <div className="ch-player__video-wrap">
-        {controllable&&<video ref={media} playsInline preload="metadata" className="ch-player__video" onClick={play}/>}
+        {controllable&&<video ref={media} playsInline preload="auto" className="ch-player__video" onClick={play}/>}
         {!controllable&&<iframe key={iframeKey} ref={iframe} title={title} src={(type==="youtube" ? src+(src.includes("?")?"&":"?")+"enablejsapi=1&origin="+encodeURIComponent(window.location.origin) : src)} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
       </div>
       <div className="ch-player__top-gradient"/>
@@ -232,7 +235,7 @@ export default function CricketHubPlayer({src,title}:Props){
           <div className="ch-player__right">
             <button className="ch-icon-btn ch-reaction" onClick={()=>send(reaction)} title="Reaction">{reaction}</button>
             {controllable&&<><button className="ch-label-btn" onClick={()=>setMenu(menu==="speed"?null:"speed")}>{speed}×</button><button className="ch-icon-btn" onClick={()=>setMenu(menu==="settings"?null:"settings")}>⚙</button></>}
-            <button className="ch-icon-btn" onClick={()=>setTheater((x)=>!x)}>▣</button>{!controllable&&<><button className="ch-icon-btn" onClick={reloadProvider} title="Reload">↻</button><button className="ch-icon-btn" onClick={openProvider} title="Open in new tab">↗</button><button className="ch-icon-btn" onClick={copyProvider} title="Copy provider URL">{copied?"✓":"⧉"}</button></>}<button className="ch-icon-btn" onClick={()=>void full()}>⛶</button>
+            <button className="ch-icon-btn" onClick={()=>setTheater((x)=>!x)}>▣</button>{!controllable&&<><button className="ch-icon-btn" onClick={reloadProvider} title="Reload">↻</button><button className="ch-icon-btn" onClick={copyProvider} title="Copy provider URL">{copied?"✓":"⧉"}</button></>}<button className="ch-icon-btn" onClick={()=>void full()}>⛶</button>
           </div>
         </div>
         {menu&&<div className="ch-player__menu">
@@ -245,6 +248,6 @@ export default function CricketHubPlayer({src,title}:Props){
       {!controllable&&!apiReady&&<div className="ch-player__provider-note">Provider mode · controls are available inside the embedded player</div>}
       <div className="ch-player__reactions">{reactions.map((r)=><span key={r.id}>{r.emoji}</span>)}</div>
     </div>
-    <footer className="ch-player__footer"><div><b>● {type==="embed"||type==="hls"?"LIVE":"PLAY"}</b> <span>{title}</span></div><div className="ch-shortcuts"><span>Space/K</span> play <span>← →</span> ±5s <span>↑ ↓</span> volume <span>M</span> mute <span>J/L</span> ±10s <span>F</span> fullscreen <span>T</span> theater <span>R</span> reload <span>Esc</span> close</div></footer>
+    <footer className="ch-player__footer"><div><b>● {type==="embed"||type==="hls"?"LIVE":"PLAY"}</b> <span>{title}</span></div><div className="ch-shortcuts">{canControl?<><span>Space/K</span> play <span>← →</span> ±5s <span>↑ ↓</span> volume <span>M</span> mute <span>J/L</span> ±10s <span>F</span> fullscreen <span>T</span> theater <span>R</span> reload <span>Esc</span> close</>:<><span>F</span> fullscreen <span>T</span> theater <span>R</span> reload <span>Esc</span> close</>}</div></footer>
   </section>;
 }
