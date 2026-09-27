@@ -70,6 +70,11 @@ export default function CricketHubPlayer({src,title}:Props){
   const setVol=(v:number)=>{
     if(!media.current)return;media.current.volume=v;media.current.muted=v===0;setVolume(v);setMuted(v===0);wake();
   };
+  const changeVolume=(delta:number)=>{
+    if(!controllable||!media.current)return;
+    const next=Math.max(0,Math.min(1,media.current.volume+delta));
+    setVol(next);
+  };
   const reloadProvider=()=>{if(!controllable){setIframeKey(x=>x+1);wake()}};
   const openProvider=()=>{window.open(src,"_blank","noopener,noreferrer")};
   const copyProvider=async()=>{try{await navigator.clipboard.writeText(src);setCopied(true);window.setTimeout(()=>setCopied(false),1600)}catch{}};
@@ -125,11 +130,26 @@ export default function CricketHubPlayer({src,title}:Props){
     const key=(e:KeyboardEvent)=>{
       if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;
       const k=e.key.toLowerCase();
-      if(e.key===" "){e.preventDefault();play()}else if(e.key==="ArrowLeft"){e.preventDefault();seek(-10)}else if(e.key==="ArrowRight"){e.preventDefault();seek(10)}
-      else if(k==="m"){e.preventDefault();mute()}else if(k==="f"){e.preventDefault();void full()}else if(k==="t"){e.preventDefault();setTheater((x)=>!x)}else if(k==="r"&&!controllable){e.preventDefault();reloadProvider()}else if(k==="o"&&!controllable){e.preventDefault();openProvider()}else if(e.key==="Escape"){setMenu(null);setTheater(false)}
+      if(e.key===" "||k==="k"||k==="p"){e.preventDefault();if(controllable)play()}
+      else if(e.key==="ArrowLeft"){e.preventDefault();if(controllable)seek(-5)}
+      else if(e.key==="ArrowRight"){e.preventDefault();if(controllable)seek(5)}
+      else if(e.key==="ArrowUp"){e.preventDefault();if(controllable)changeVolume(.05)}
+      else if(e.key==="ArrowDown"){e.preventDefault();if(controllable)changeVolume(-.05)}
+      else if(k==="j"){e.preventDefault();if(controllable)seek(-10)}
+      else if(k==="l"){e.preventDefault();if(controllable)seek(10)}
+      else if(k==="m"){e.preventDefault();if(controllable)mute()}
+      else if(k==="f"){e.preventDefault();void full()}
+      else if(k==="t"){e.preventDefault();setTheater((x)=>!x)}
+      else if(k==="r"&&!controllable){e.preventDefault();reloadProvider()}
+      else if(k==="o"&&!controllable){e.preventDefault();openProvider()}
+      else if(e.key==="Home"||e.key==="0"){e.preventDefault();if(controllable&&media.current){media.current.currentTime=0;wake()}}
+      else if(e.key==="End"){e.preventDefault();if(controllable&&media.current&&duration){media.current.currentTime=duration;wake()}}
+      else if(k===","&&controllable){e.preventDefault();changeSpeed(Math.max(.5,Number((speed-.25).toFixed(2))))}
+      else if(k==="."&&controllable){e.preventDefault();changeSpeed(Math.min(2,Number((speed+.25).toFixed(2))))}
+      else if(e.key==="Escape"){setMenu(null);setTheater(false)}
     };
     addEventListener("keydown",key);return()=>removeEventListener("keydown",key);
-  });
+  },[controllable,duration,speed]);
   useEffect(()=>{wake();return()=>{if(timer.current)clearTimeout(timer.current)}},[playing,wake]);
 
   const setSeek=(v:number)=>{if(media.current&&duration)media.current.currentTime=v/100*duration;wake()};
@@ -187,6 +207,6 @@ export default function CricketHubPlayer({src,title}:Props){
       {!controllable&&<div className="ch-player__provider-note">Provider mode · Play, seek, volume and quality are controlled inside the embedded player</div>}
       <div className="ch-player__reactions">{reactions.map((r)=><span key={r.id}>{r.emoji}</span>)}</div>
     </div>
-    <footer className="ch-player__footer"><div><b>● {type==="embed"||type==="hls"?"LIVE":"PLAY"}</b> <span>{title}</span></div><div className="ch-shortcuts"><span>Space</span> play <span>← →</span> seek <span>M</span> mute <span>T</span> theater <span>F</span> fullscreen</div></footer>
+    <footer className="ch-player__footer"><div><b>● {type==="embed"||type==="hls"?"LIVE":"PLAY"}</b> <span>{title}</span></div><div className="ch-shortcuts"><span>Space/K</span> play <span>← →</span> ±5s <span>↑ ↓</span> volume <span>M</span> mute <span>J/L</span> ±10s <span>F</span> fullscreen <span>T</span> theater <span>R</span> reload <span>Esc</span> close</div></footer>
   </section>;
 }
