@@ -1,25 +1,16 @@
 "use client";
 
-import {useCallback,useEffect,useRef,useState} from "react";
-import type {CSSProperties} from "react";
+import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 
 declare global {
-  interface Window {
-    Plyr?: any;
-    Hls?: any;
-  }
+  interface Window { Hls?: any; }
 }
 
-type Props={
-  src:string;
-  title:string;
-};
-
-const PLYR_JS="https://cdn.plyr.io/3.8.4/plyr.polyfilled.js";
-const PLYR_CSS="https://cdn.plyr.io/3.8.4/plyr.css";
+type Props={src:string;title:string};
+type MediaKind="youtube"|"vimeo"|"hls"|"html5"|"embed";
 const HLS_JS="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js";
 
-function kindOf(src:string){
+function kindOf(src:string):MediaKind{
   const value=src.toLowerCase().split("?")[0];
   if(value.includes("youtube.com")||value.includes("youtu.be"))return "youtube";
   if(value.includes("vimeo.com"))return "vimeo";
@@ -27,214 +18,148 @@ function kindOf(src:string){
   if(/\.(mp4|webm|ogg|ogv)$/.test(value))return "html5";
   return "embed";
 }
-
 function loadScript(src:string){
   return new Promise<void>((resolve,reject)=>{
-    const existing=document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
-    if(existing){
-      if((existing as any).dataset.loaded==="true")return resolve();
-      existing.addEventListener("load",()=>resolve(),{once:true});
-      existing.addEventListener("error",()=>reject(new Error(`Failed to load ${src}`)),{once:true});
-      return;
-    }
-    const script=document.createElement("script");
-    script.src=src;
-    script.async=true;
-    script.onload=()=>{script.dataset.loaded="true";resolve()};
-    script.onerror=()=>reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(script);
+    const old=document.querySelector<HTMLScriptElement>('script[src="'+src+'"]');
+    if(old){if((old as any).dataset.loaded==="true")return resolve();old.addEventListener("load",()=>resolve(),{once:true});old.addEventListener("error",()=>reject(new Error("Player dependency failed")),{once:true});return;}
+    const s=document.createElement("script");s.src=src;s.async=true;
+    s.onload=()=>{s.dataset.loaded="true";resolve()};s.onerror=()=>reject(new Error("Player dependency failed"));document.head.appendChild(s);
   });
 }
-
-function loadCss(href:string){
-  if(document.querySelector(`link[href="${href}"]`))return;
-  const link=document.createElement("link");
-  link.rel="stylesheet";
-  link.href=href;
-  document.head.appendChild(link);
+function fmt(n:number){
+  if(!Number.isFinite(n)||n<0)return "00:00";
+  const s=Math.floor(n),h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;
+  return h?[h,m,x].map((v)=>String(v).padStart(2,"0")).join(":"):[m,x].map((v)=>String(v).padStart(2,"0")).join(":");
 }
 
 export default function CricketHubPlayer({src,title}:Props){
-  const rootRef=useRef<HTMLDivElement>(null);
-  const mediaRef=useRef<HTMLVideoElement>(null);
-  const playerRef=useRef<any>(null);
-  const hlsRef=useRef<any>(null);
-  const [mode,setMode]=useState<"normal"|"theater">("normal");
-  const [loaded,setLoaded]=useState(false);
-  const [error,setError]=useState("");
-  const [cheers,setCheers]=useState(0);
-  const [muted,setMuted]=useState(false);
-  const type=kindOf(src);
+  const root=useRef<HTMLDivElement>(null),media=useRef<HTMLVideoElement>(null),hls=useRef<any>(null),timer=useRef<number|null>(null);
+  const type=useMemo(()=>kindOf(src),[src]), controllable=type==="hls"||type==="html5";
+  const [playing,setPlaying]=useState(false),[muted,setMuted]=useState(false),[volume,setVolume]=useState(.9);
+  const [current,setCurrent]=useState(0),[duration,setDuration]=useState(0),[buffered,setBuffered]=useState(0);
+  const [speed,setSpeed]=useState(1),[quality,setQuality]=useState("Auto"),[theater,setTheater]=useState(false);
+  const [fullscreen,setFullscreen]=useState(false),[controls,setControls]=useState(true),[menu,setMenu]=useState<string|null>(null);
+  const [ambient,setAmbient]=useState(false),[autoplay,setAutoplay]=useState(false),[error,setError]=useState("");
+  const [reaction,setReaction]=useState("🔥"),[reactions,setReactions]=useState<{id:number;emoji:string}[]>([]);
+  const progress=duration?Math.min(100,current/duration*100):0,buf=duration?Math.min(100,buffered/duration*100):0;
 
-  const fullscreen=useCallback(()=>{
-    const element=rootRef.current;
-    if(!element)return;
-    if(document.fullscreenElement)document.exitFullscreen();
-    else element.requestFullscreen?.();
+  const wake=useCallback(()=>{
+    setControls(true);if(timer.current)clearTimeout(timer.current);
+    if(playing)timer.current=window.setTimeout(()=>setControls(false),2800);
+  },[playing]);
+
+  const full=useCallback(async()=>{
+    if(!root.current)return;
+    if(document.fullscreenElement)await document.exitFullscreen?.();else await root.current.requestFullscreen?.();
   },[]);
-
-  const cheer=useCallback(()=>{
-    setCheers(n=>n+1);
-    window.setTimeout(()=>setCheers(n=>Math.max(0,n-1)),1800);
-  },[]);
-
-  useEffect(()=>{
-    loadCss(PLYR_CSS);
-    let cancelled=false;
-
-    async function boot(){
-      try{
-        setError("");
-        await loadScript(PLYR_JS);
-        if(cancelled)return;
-
-        if(type==="hls"&&mediaRef.current){
-          await loadScript(HLS_JS);
-          if(cancelled)return;
-          if(window.Hls?.isSupported()){
-            const hls=new window.Hls({enableWorker:true,lowLatencyMode:true});
-            hlsRef.current=hls;
-            hls.loadSource(src);
-            hls.attachMedia(mediaRef.current);
-          }else{
-            mediaRef.current.src=src;
-          }
-        }else if(type==="html5"&&mediaRef.current){
-          mediaRef.current.src=src;
-        }
-
-        const target=rootRef.current?.querySelector<HTMLElement>(".js-crickethub-player");
-        if(target&&window.Plyr){
-          playerRef.current=new window.Plyr(target,{
-            controls:["play-large","rewind","play","fast-forward","progress","current-time","mute","volume","settings","pip","fullscreen"],
-            seekTime:10,
-            keyboard:{focused:true,global:true},
-            tooltips:{controls:true,seek:true},
-            settings:["speed","loop"],
-            speed:{selected:1,options:[0.5,0.75,1,1.25,1.5,1.75,2]},
-            ratio:"16:9",
-            autoplay:false,
-            hideControls:true,
-            resetOnEnd:false,
-            i18n:{
-              restart:"Restart",
-              rewind:"Rewind {seektime}s",
-              play:"Play",
-              pause:"Pause",
-              fastForward:"Forward {seektime}s",
-              seek:"Seek",
-              seekLabel:"Seek {currentTime} of {duration}",
-              played:"Played",
-              buffered:"Buffered",
-              currentTime:"Current time",
-              duration:"Duration",
-              volume:"Volume",
-              mute:"Mute",
-              unmute:"Unmute",
-              enableCaptions:"Enable captions",
-              disableCaptions:"Disable captions",
-              enterFullscreen:"Enter fullscreen",
-              exitFullscreen:"Exit fullscreen",
-              speed:"Speed",
-              normal:"Normal",
-              loop:"Loop",
-              start:"Start",
-              end:"End",
-              pip:"PIP"
-            }
-          });
-          playerRef.current.on?.("ready",()=>{if(!cancelled)setLoaded(true)});
-          playerRef.current.on?.("error",()=>{if(!cancelled)setError("The media provider reported a playback error.")});
-        }else if(type==="embed"||type==="youtube"||type==="vimeo"){
-          setLoaded(true);
-        }
-      }catch(e){
-        if(!cancelled)setError(e instanceof Error?e.message:"Player failed to initialize.");
-      }
-    }
-
-    boot();
-    return ()=>{
-      cancelled=true;
-      playerRef.current?.destroy?.();
-      playerRef.current=null;
-      hlsRef.current?.destroy?.();
-      hlsRef.current=null;
-    };
-  },[src,type]);
-
-  useEffect(()=>{
-    const onKey=(event:KeyboardEvent)=>{
-      if(event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement)return;
-      if(event.key.toLowerCase()==="t")setMode(m=>m==="normal"?"theater":"normal");
-      if(event.key.toLowerCase()==="f")fullscreen();
-      if(event.key==="ArrowLeft"&&playerRef.current)playerRef.current.currentTime=Math.max(0,(playerRef.current.currentTime||0)-10);
-      if(event.key==="ArrowRight"&&playerRef.current)playerRef.current.currentTime=(playerRef.current.currentTime||0)+10;
-      if(event.key.toLowerCase()==="m"&&playerRef.current){
-        playerRef.current.muted=!playerRef.current.muted;
-        setMuted(!!playerRef.current.muted);
-      }
-    };
-    window.addEventListener("keydown",onKey);
-    return()=>window.removeEventListener("keydown",onKey);
-  },[fullscreen]);
-
-  const setVolume=(value:number)=>{
-    if(playerRef.current)playerRef.current.volume=value;
-    setMuted(value===0);
+  const seek=(d:number)=>{
+    if(!media.current||!duration)return;
+    media.current.currentTime=Math.max(0,Math.min(duration,media.current.currentTime+d));wake();
+  };
+  const play=()=>{
+    if(!controllable||!media.current)return;
+    if(media.current.paused)media.current.play().catch(()=>{});else media.current.pause();wake();
+  };
+  const mute=()=>{
+    if(!media.current)return;
+    media.current.muted=!media.current.muted;setMuted(media.current.muted);
+    if(!media.current.muted&&media.current.volume===0){media.current.volume=.8;setVolume(.8);}wake();
+  };
+  const setVol=(v:number)=>{
+    if(!media.current)return;media.current.volume=v;media.current.muted=v===0;setVolume(v);setMuted(v===0);wake();
+  };
+  const send=(emoji:string)=>{
+    setReaction(emoji);const id=Date.now()+Math.random();
+    setReactions((x)=>[...x,{id,emoji}].slice(-8));setTimeout(()=>setReactions((x)=>x.filter((r)=>r.id!==id)),1800);
   };
 
-  return <section ref={rootRef} className={`cricket-player ${mode==="theater"?"cricket-player--theater":""}`}>
-    <div className="cricket-player__topbar">
-      <div className="min-w-0">
-        <div className="cricket-player__live"><span/> CRICKETHUB PLAYER</div>
-        <h2 className="truncate text-sm font-black sm:text-base">{title}</h2>
+  useEffect(()=>{
+    let dead=false;
+    const boot=async()=>{
+      try{
+        setError("");
+        if(!controllable)return;
+        const v=media.current;if(!v)return;
+        if(type==="hls"){
+          await loadScript(HLS_JS);if(dead)return;
+          if(window.Hls?.isSupported()){
+            const h=new window.Hls({enableWorker:true,lowLatencyMode:true,maxBufferLength:30});
+            hls.current=h;h.loadSource(src);h.attachMedia(v);
+            h.on(window.Hls.Events.ERROR,(_:any,d:any)=>{if(d?.fatal)setError("Stream playback error — refresh and try again.");});
+          }else v.src=src;
+        }else v.src=src;
+        const loaded=()=>setDuration(v.duration||0),time=()=>setCurrent(v.currentTime||0),prog=()=>{try{setBuffered(v.buffered.length?v.buffered.end(v.buffered.length-1):0)}catch{}};
+        const onPlay=()=>setPlaying(true),onPause=()=>setPlaying(false),onEnd=()=>{setPlaying(false);if(autoplay)v.play().catch(()=>{})};
+        v.addEventListener("loadedmetadata",loaded);v.addEventListener("timeupdate",time);v.addEventListener("progress",prog);
+        v.addEventListener("play",onPlay);v.addEventListener("pause",onPause);v.addEventListener("ended",onEnd);
+        return()=>{v.removeEventListener("loadedmetadata",loaded);v.removeEventListener("timeupdate",time);v.removeEventListener("progress",prog);v.removeEventListener("play",onPlay);v.removeEventListener("pause",onPause);v.removeEventListener("ended",onEnd);};
+      }catch(e){if(!dead)setError(e instanceof Error?e.message:"Player initialization failed.");}
+    };
+    const cleanup=boot();
+    return()=>{dead=true;hls.current?.destroy?.();hls.current=null;void cleanup;};
+  },[src,type,autoplay,controllable]);
+
+  useEffect(()=>{
+    const key=(e:KeyboardEvent)=>{
+      if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;
+      const k=e.key.toLowerCase();
+      if(e.key===" "){e.preventDefault();play()}else if(e.key==="ArrowLeft"){e.preventDefault();seek(-10)}else if(e.key==="ArrowRight"){e.preventDefault();seek(10)}
+      else if(k==="m"){e.preventDefault();mute()}else if(k==="f"){e.preventDefault();void full()}else if(k==="t"){e.preventDefault();setTheater((x)=>!x)}else if(e.key==="Escape"){setMenu(null);setTheater(false)}
+    };
+    addEventListener("keydown",key);return()=>removeEventListener("keydown",key);
+  });
+  useEffect(()=>{wake();return()=>{if(timer.current)clearTimeout(timer.current)}},[playing,wake]);
+
+  const setSeek=(v:number)=>{if(media.current&&duration)media.current.currentTime=v/100*duration;wake()};
+  const speeds=[.5,.75,1,1.25,1.5,1.75,2];
+  const changeSpeed=(v:number)=>{setSpeed(v);if(media.current)media.current.playbackRate=v;setMenu(null)};
+
+  return <section ref={root} onMouseMove={wake} onMouseLeave={()=>playing&&setControls(false)} onTouchStart={wake} className={"ch-player "+(theater?"ch-player--theater ":"")+(controls?"ch-player--controls ":"ch-player--clean ")+(ambient?"ch-player--ambient":"")}>
+    <div className="ch-player__ambient"/>
+    <header className="ch-player__header">
+      <div className="ch-player__title"><div className="ch-player__live"><span/> LIVE <i>•</i> CRICKETHUB</div><strong>{title}</strong></div>
+      <div className="ch-player__header-actions"><button onClick={()=>setTheater((x)=>!x)} title="Theater">▣</button><button onClick={()=>void full()} title="Fullscreen">⛶</button></div>
+    </header>
+    <div className="ch-player__stage" onDoubleClick={(e)=>{
+      if((e.target as HTMLElement).closest(".ch-player__controls"))return;
+      if(controllable){const r=e.currentTarget.getBoundingClientRect();seek(e.clientX<r.left+r.width/2?-10:10);}
+    }}>
+      <div className="ch-player__video-wrap">
+        {controllable&&<video ref={media} playsInline preload="metadata" className="ch-player__video" onClick={play}/>}
+        {!controllable&&<iframe title={title} src={src} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
       </div>
-      <div className="flex items-center gap-1.5">
-        <button type="button" className="cricket-player__chip" onClick={()=>setMode(m=>m==="normal"?"theater":"normal")} title="Theater mode">◫ <span className="hidden sm:inline">Theater</span></button>
-        <button type="button" className="cricket-player__chip" onClick={fullscreen} title="Fullscreen">⛶</button>
+      <div className="ch-player__top-gradient"/>
+      <div className="ch-player__brand">🏏 CricketHub</div>
+      <div className="ch-player__live-pill"><span/> {type==="embed"||type==="hls"?"LIVE":"ON DEMAND"}</div>
+      {controllable&&<button className={"ch-player__bigplay "+(playing?"is-playing":"")} onClick={play} aria-label={playing?"Pause":"Play"}>{playing?"Ⅱ":"▶"}</button>}
+      {error&&<div className="ch-player__error">⚠️ {error}</div>}
+      <div className="ch-player__controls">
+        {controllable&&<div className="ch-player__timeline-wrap"><div className="ch-player__timeline"><span className="ch-player__buffer" style={{width:buf+"%"}}/><span className="ch-player__played" style={{width:progress+"%"}}/><input aria-label="Seek" type="range" min="0" max="100" step=".1" value={progress} onChange={(e)=>setSeek(Number(e.target.value))}/></div></div>}
+        <div className="ch-player__control-row">
+          <div className="ch-player__left">
+            <button className="ch-icon-btn" onClick={play} disabled={!controllable}>{playing?"Ⅱ":"▶"}</button>
+            <button className="ch-icon-btn" onClick={()=>seek(-10)} disabled={!controllable}>↶<small>10</small></button>
+            <button className="ch-icon-btn" onClick={()=>seek(10)} disabled={!controllable}>↷<small>10</small></button>
+            {controllable&&<div className="ch-volume"><button className="ch-icon-btn" onClick={mute}>{muted||volume===0?"🔇":"🔊"}</button><input aria-label="Volume" type="range" min="0" max="1" step=".01" value={muted?0:volume} onChange={(e)=>setVol(Number(e.target.value))}/></div>}
+            <span className="ch-time">{controllable?fmt(current):"Provider controls active"}</span>{controllable&&<span className="ch-time">/ {duration?fmt(duration):"LIVE"}</span>}
+          </div>
+          <div className="ch-player__right">
+            <button className="ch-icon-btn ch-reaction" onClick={()=>send(reaction)} title="Reaction">{reaction}</button>
+            <button className="ch-label-btn" onClick={()=>setMenu(menu==="speed"?null:"speed")}>{speed}×</button>
+            <button className="ch-icon-btn" onClick={()=>setMenu(menu==="settings"?null:"settings")}>⚙</button>
+            <button className="ch-icon-btn" onClick={()=>setTheater((x)=>!x)}>▣</button><button className="ch-icon-btn" onClick={()=>void full()}>⛶</button>
+          </div>
+        </div>
+        {menu&&<div className="ch-player__menu">
+          {menu==="settings"&&<><button onClick={()=>setMenu("speed")}>Speed <b>{speed}×</b><span>›</span></button><button onClick={()=>setMenu("quality")}>Quality <b>{quality}</b><span>›</span></button><button onClick={()=>setAmbient((x)=>!x)}>Ambient glow <b>{ambient?"On":"Off"}</b></button><button onClick={()=>setAutoplay((x)=>!x)}>Autoplay <b>{autoplay?"On":"Off"}</b></button><button onClick={()=>setMenu("stats")}>Stats for nerds <span>›</span></button></>}
+          {menu==="speed"&&<><div className="ch-menu-title">Playback speed</div>{speeds.map((v)=><button key={v} className={speed===v?"active":""} onClick={()=>changeSpeed(v)}>{v===1?"Normal":v+"×"} {speed===v&&"✓"}</button>)}</>}
+          {menu==="quality"&&<><div className="ch-menu-title">Stream quality</div>{["Auto","1080p","720p","480p"].map((v)=><button key={v} className={quality===v?"active":""} onClick={()=>{setQuality(v);setMenu(null)}}>{v} {quality===v&&"✓"}</button>)}<p className="ch-menu-note">Quality changes only when the stream exposes multiple renditions.</p></>}
+          {menu==="stats"&&<><div className="ch-menu-title">Stats for nerds</div><div className="ch-stats"><span>Source <b>{type.toUpperCase()}</b></span><span>Buffer <b>{fmt(buffered)}</b></span><span>Speed <b>{speed}×</b></span><span>Mode <b>{theater?"Theater":"Normal"}</b></span></div></>}
+        </div>}
       </div>
+      {!controllable&&<div className="ch-player__provider-note">Provider controls active · CricketHub cannot control a cross-origin player internally</div>}
+      <div className="ch-player__reactions">{reactions.map((r)=><span key={r.id}>{r.emoji}</span>)}</div>
     </div>
-
-    <div className="cricket-player__stage">
-      {type==="embed"&&<iframe title={title} src={src} className="cricket-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
-
-      {(type==="html5"||type==="hls")&&<video ref={mediaRef} className="js-crickethub-player" playsInline preload="metadata"/>}
-
-      {(type==="youtube"||type==="vimeo")&&<div className="plyr__video-embed js-crickethub-player">
-        <iframe
-          src={src}
-          title={title}
-          allow="autoplay; fullscreen; picture-in-picture"
-          allowFullScreen
-        />
-      </div>}
-
-      {!loaded&&type!=="embed"&&<div className="cricket-player__loading"><div className="cricket-player__spinner"/>Loading player…</div>}
-      {error&&<div className="cricket-player__error">⚠️ {error}</div>}
-
-      <div className="cricket-player__watermark">🏏 CricketHub</div>
-
-      {cheers>0&&<div className="cricket-player__cheers" aria-live="polite">
-        {Array.from({length:Math.min(cheers,7)}).map((_,i)=><span key={i} style={{"--i":i} as CSSProperties}>🏏</span>)}
-      </div>}
-    </div>
-
-    <div className="cricket-player__bar">
-      <div className="flex items-center gap-2">
-        <button type="button" className="cricket-player__action" onClick={()=>playerRef.current?.play?.()} title="Play">▶</button>
-        <button type="button" className="cricket-player__action" onClick={()=>playerRef.current&&(playerRef.current.currentTime=Math.max(0,(playerRef.current.currentTime||0)-10))} title="Back 10 seconds">↶10</button>
-        <button type="button" className="cricket-player__action" onClick={()=>playerRef.current&&(playerRef.current.currentTime=(playerRef.current.currentTime||0)+10)} title="Forward 10 seconds">10↷</button>
-      </div>
-      <div className="flex items-center gap-2">
-        {(type==="html5"||type==="hls"||type==="youtube"||type==="vimeo")&&<label className="cricket-player__volume" title="Volume"><span>{muted?"🔇":"🔊"}</span><input aria-label="Volume" type="range" min="0" max="1" step="0.05" defaultValue="1" onChange={e=>setVolume(Number(e.target.value))}/></label>}
-        <button type="button" className="cricket-player__action cricket-player__cheer" onClick={cheer}>🔥 Cheer</button>
-      </div>
-    </div>
-
-    <div className="cricket-player__hint">
-      <span>⌨️ <b>Space</b> play</span><span>← → <b>10s</b></span><span><b>T</b> theater</span><span><b>F</b> fullscreen</span><span><b>M</b> mute</span>
-      {type==="embed"&&<span className="ml-auto text-amber-300/80">Provider controls stay inside the embedded player</span>}
-    </div>
+    <footer className="ch-player__footer"><div><b>● {type==="embed"||type==="hls"?"LIVE":"PLAY"}</b> <span>{title}</span></div><div className="ch-shortcuts"><span>Space</span> play <span>← →</span> seek <span>M</span> mute <span>T</span> theater <span>F</span> fullscreen</div></footer>
   </section>;
 }
