@@ -60,3 +60,9 @@
 .ch-player__iframe{z-index:1}
 .ch-player__header,.ch-player__controls,.ch-player__provider-note,.ch-player__brand,.ch-player__live-pill{z-index:10}
 @media(max-width:700px){.ch-provider-status{font-size:9px;padding:5px 7px}.ch-player__provider-note{left:8px;right:auto;bottom:52px;max-width:calc(100% - 16px)}}
+
+.ch-player__header-actions button,.ch-player__controls button{transition:transform .15s ease,background .15s ease,border-color .15s ease}
+.ch-player__header-actions button:hover,.ch-player__controls button:hover{transform:translateY(-1px)}
+.ch-player__header-actions button:active,.ch-player__controls button:active{transform:scale(.94)}
+.ch-player__provider-note{max-width:min(520px,calc(100% - 28px));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:700px){.ch-player__provider-note{font-size:8px;bottom:55px}}
