@@ -102,6 +102,26 @@ export default function CricketHubPlayer({src,title}:Props){
   };
 
   useEffect(()=>{
+    if(!apiControllable)return;
+    let dead=false;
+    const init=async()=>{
+      try{
+        if(type==="vimeo"){
+          await loadScript(VIMEO_JS);if(dead||!window.Vimeo||!iframe.current)return;
+          const p=new window.Vimeo.Player(iframe.current);apiPlayer.current=p;await p.ready();if(dead)return;setApiReady(true);
+          p.on("timeupdate",(e:any)=>{setCurrent(e.seconds||0);setDuration(e.duration||0);});
+          p.on("volumechange",(e:any)=>{setVolume(e.volume??.9);setMuted(!!e.muted);});
+        }else{
+          await loadScript(YOUTUBE_JS);if(dead||!window.YT||!iframe.current)return;
+          const p=new window.YT.Player(iframe.current,{events:{onReady:()=>{if(dead)return;apiPlayer.current=p;setApiReady(true);setDuration(Number(p.getDuration?.()||0));setVolume(Number(p.getVolume?.()||90)/100);},onStateChange:(e:any)=>setPlaying(e.data===1)}});
+        }
+      }catch{if(!dead)setApiReady(false);}
+    };
+    void init();
+    return()=>{dead=true;apiPlayer.current?.destroy?.();apiPlayer.current=null;setApiReady(false);};
+  },[apiControllable,type,src]);
+
+  useEffect(()=>{
     let dead=false;
     autoplayRef.current=autoplay;
     const boot=async()=>{
@@ -148,14 +168,14 @@ export default function CricketHubPlayer({src,title}:Props){
     const key=(e:KeyboardEvent)=>{
       if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;
       const k=e.key.toLowerCase();
-      if(e.key===" "||k==="k"||k==="p"){e.preventDefault();if(controllable)play()}
-      else if(e.key==="ArrowLeft"){e.preventDefault();if(controllable)seek(-5)}
-      else if(e.key==="ArrowRight"){e.preventDefault();if(controllable)seek(5)}
-      else if(e.key==="ArrowUp"){e.preventDefault();if(controllable)changeVolume(.05)}
-      else if(e.key==="ArrowDown"){e.preventDefault();if(controllable)changeVolume(-.05)}
-      else if(k==="j"){e.preventDefault();if(controllable)seek(-10)}
-      else if(k==="l"){e.preventDefault();if(controllable)seek(10)}
-      else if(k==="m"){e.preventDefault();if(controllable)mute()}
+      if(e.key===" "||k==="k"||k==="p"){e.preventDefault();if(canControl)play()}
+      else if(e.key==="ArrowLeft"){e.preventDefault();if(canControl)seek(-5)}
+      else if(e.key==="ArrowRight"){e.preventDefault();if(canControl)seek(5)}
+      else if(e.key==="ArrowUp"){e.preventDefault();if(canControl)changeVolume(.05)}
+      else if(e.key==="ArrowDown"){e.preventDefault();if(canControl)changeVolume(-.05)}
+      else if(k==="j"){e.preventDefault();if(canControl)seek(-10)}
+      else if(k==="l"){e.preventDefault();if(canControl)seek(10)}
+      else if(k==="m"){e.preventDefault();if(canControl)mute()}
       else if(k==="f"){e.preventDefault();void full()}
       else if(k==="t"){e.preventDefault();setTheater((x)=>!x)}
       else if(k==="r"&&!controllable){e.preventDefault();reloadProvider()}
@@ -167,7 +187,7 @@ export default function CricketHubPlayer({src,title}:Props){
       else if(e.key==="Escape"){setMenu(null);setTheater(false)}
     };
     addEventListener("keydown",key);return()=>removeEventListener("keydown",key);
-  },[controllable,duration,speed]);
+  },[canControl,controllable,duration,speed]);
   useEffect(()=>{wake();return()=>{if(timer.current)clearTimeout(timer.current)}},[playing,wake]);
 
   const setSeek=(v:number)=>{if(media.current&&duration)media.current.currentTime=v/100*duration;wake()};
