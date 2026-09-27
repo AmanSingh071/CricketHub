@@ -211,7 +211,7 @@ export default function CricketHubPlayer({src,title}:Props){
     }}>
       <div className="ch-player__video-wrap">
         {controllable&&<video ref={media} playsInline preload="metadata" className="ch-player__video" onClick={play}/>}
-        {!controllable&&<iframe key={iframeKey} ref={iframe} title={title} src={src} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
+        {!controllable&&<iframe key={iframeKey} ref={iframe} title={title} src={(type==="youtube" ? src+(src.includes("?")?"&":"?")+"enablejsapi=1&origin="+encodeURIComponent(window.location.origin) : src)} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
       </div>
       <div className="ch-player__top-gradient"/>
       <div className="ch-player__brand">🏏 CricketHub</div>
@@ -227,7 +227,7 @@ export default function CricketHubPlayer({src,title}:Props){
             <button className="ch-icon-btn" onClick={()=>seek(10)}>↷<small>10</small></button>
             <div className="ch-volume"><button className="ch-icon-btn" onClick={mute}>{muted||volume===0?"🔇":"🔊"}</button><input aria-label="Volume" type="range" min="0" max="1" step=".01" value={muted?0:volume} onChange={(e)=>setVol(Number(e.target.value))}/></div>
             <span className="ch-time">{fmt(current)}</span><span className="ch-time">/ {duration?fmt(duration):"LIVE"}</span></>}
-            {!controllable&&<span className="ch-provider-status"><span/> Provider controls</span>}
+            {!controllable&&apiReady&&<><button className="ch-icon-btn" onClick={()=>seek(-5)} title="Back 5 seconds">↶<small>5</small></button><button className="ch-icon-btn" onClick={play} title="Play/Pause">▶</button><button className="ch-icon-btn" onClick={()=>seek(5)} title="Forward 5 seconds">↷<small>5</small></button><button className="ch-icon-btn" onClick={mute} title="Mute">🔊</button><span className="ch-provider-status"><span/> API controls</span></>}{!controllable&&!apiReady&&<span className="ch-provider-status"><span/> Provider controls</span>}
           </div>
           <div className="ch-player__right">
             <button className="ch-icon-btn ch-reaction" onClick={()=>send(reaction)} title="Reaction">{reaction}</button>
@@ -242,7 +242,7 @@ export default function CricketHubPlayer({src,title}:Props){
           {menu==="stats"&&<><div className="ch-menu-title">Stats for nerds</div><div className="ch-stats"><span>Source <b>{type.toUpperCase()}</b></span><span>Quality <b>{quality}</b></span><span>Buffer <b>{fmt(buffered)}</b></span><span>Speed <b>{speed}×</b></span><span>Mode <b>{theater?"Theater":"Normal"}</b></span></div></>}
         </div>}
       </div>
-      {!controllable&&<div className="ch-player__provider-note">Provider mode · Play, seek, volume and quality are controlled inside the embedded player</div>}
+      {!controllable&&!apiReady&&<div className="ch-player__provider-note">Provider mode · controls are available inside the embedded player</div>}
       <div className="ch-player__reactions">{reactions.map((r)=><span key={r.id}>{r.emoji}</span>)}</div>
     </div>
     <footer className="ch-player__footer"><div><b>● {type==="embed"||type==="hls"?"LIVE":"PLAY"}</b> <span>{title}</span></div><div className="ch-shortcuts"><span>Space/K</span> play <span>← →</span> ±5s <span>↑ ↓</span> volume <span>M</span> mute <span>J/L</span> ±10s <span>F</span> fullscreen <span>T</span> theater <span>R</span> reload <span>Esc</span> close</div></footer>
