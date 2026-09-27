@@ -156,7 +156,6 @@ export default function CricketHubPlayer({src,title}:Props){
       <div className="ch-player__brand">🏏 CricketHub</div>
       <div className="ch-player__live-pill"><span/> {type==="embed"||type==="hls"?"LIVE":"ON DEMAND"}</div>
       {controllable&&<button className={"ch-player__bigplay "+(playing?"is-playing":"")} onClick={play} aria-label={playing?"Pause":"Play"}>{playing?"Ⅱ":"▶"}</button>}
-      {!controllable&&<div className="ch-player__provider-center"><div className="ch-player__provider-icon">▶</div><strong>Provider player</strong><span>Use the controls inside the video</span><button onClick={()=>void full()}>⛶ Fullscreen</button></div>}
       {error&&<div className="ch-player__error">⚠️ {error}</div>}
       <div className="ch-player__controls">
         {controllable&&<div className="ch-player__timeline-wrap"><div className="ch-player__timeline"><span className="ch-player__buffer" style={{width:buf+"%"}}/><span className="ch-player__played" style={{width:progress+"%"}}/><input aria-label="Seek" type="range" min="0" max="100" step=".1" value={progress} onChange={(e)=>setSeek(Number(e.target.value))}/></div></div>}
