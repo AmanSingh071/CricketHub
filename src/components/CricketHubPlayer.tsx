@@ -3,13 +3,15 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 
 declare global {
-  interface Window { Hls?: any; }
+  interface Window { Hls?: any; YT?: any; Vimeo?: any; }
 }
 
 type Props={src:string;title:string};
 type Quality={label:string;index:number;height?:number;bitrate?:number};
 type MediaKind="youtube"|"vimeo"|"hls"|"html5"|"embed";
 const HLS_JS="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js";
+const VIMEO_JS="https://player.vimeo.com/api/player.js";
+const YOUTUBE_JS="https://www.youtube.com/iframe_api";
 
 function kindOf(src:string):MediaKind{
   const value=src.toLowerCase().split("?")[0];
@@ -34,8 +36,9 @@ function fmt(n:number){
 }
 
 export default function CricketHubPlayer({src,title}:Props){
-  const root=useRef<HTMLDivElement>(null),media=useRef<HTMLVideoElement>(null),hls=useRef<any>(null),timer=useRef<number|null>(null),iframe=useRef<HTMLIFrameElement>(null);
+  const root=useRef<HTMLDivElement>(null),media=useRef<HTMLVideoElement>(null),hls=useRef<any>(null),timer=useRef<number|null>(null),iframe=useRef<HTMLIFrameElement>(null),apiPlayer=useRef<any>(null);
   const type=useMemo(()=>kindOf(src),[src]), controllable=type==="hls"||type==="html5";
+  const [apiReady,setApiReady]=useState(false),apiControllable=type==="youtube"||type==="vimeo",canControl=controllable||apiReady;
   const [playing,setPlaying]=useState(false),[muted,setMuted]=useState(false),[volume,setVolume]=useState(.9);
   const [current,setCurrent]=useState(0),[duration,setDuration]=useState(0),[buffered,setBuffered]=useState(0);
   const [speed,setSpeed]=useState(1),[quality,setQuality]=useState("Auto"),[qualities,setQualities]=useState<Quality[]>([]),[theater,setTheater]=useState(false);
@@ -55,12 +58,18 @@ export default function CricketHubPlayer({src,title}:Props){
     if(document.fullscreenElement)await document.exitFullscreen?.();else await root.current.requestFullscreen?.();
   },[]);
   const seek=(d:number)=>{
-    if(!media.current||!duration)return;
-    media.current.currentTime=Math.max(0,Math.min(duration,media.current.currentTime+d));wake();
+    if(controllable){if(!media.current||!duration)return;media.current.currentTime=Math.max(0,Math.min(duration,media.current.currentTime+d));wake();return;}
+    if(!apiReady||!apiPlayer.current)return;
+    if(type==="youtube"){const t=Number(apiPlayer.current.getCurrentTime?.()||0);apiPlayer.current.seekTo(Math.max(0,t+d),true);}
+    if(type==="vimeo"){apiPlayer.current.getCurrentTime().then((t:number)=>apiPlayer.current.setCurrentTime(Math.max(0,t+d))).catch(()=>{});}
+    wake();
   };
   const play=()=>{
-    if(!controllable||!media.current)return;
-    if(media.current.paused)media.current.play().catch(()=>{});else media.current.pause();wake();
+    if(controllable){if(!media.current)return;if(media.current.paused)media.current.play().catch(()=>{});else media.current.pause();wake();return;}
+    if(!apiReady||!apiPlayer.current)return;
+    if(type==="youtube"){const state=apiPlayer.current.getPlayerState?.();state===1?apiPlayer.current.pauseVideo():apiPlayer.current.playVideo();}
+    if(type==="vimeo"){apiPlayer.current.getPaused().then((paused:boolean)=>paused?apiPlayer.current.play():apiPlayer.current.pause()).catch(()=>{});}
+    wake();
   };
   const mute=()=>{
     if(!media.current)return;
