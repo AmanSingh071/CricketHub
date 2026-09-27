@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback,useEffect,useRef,useState} from "react";
+import {useCallback,useEffect,useRef,useState} from "react";\nimport type {CSSProperties} from "react";
 
 declare global {
   interface Window {
@@ -215,7 +215,7 @@ export default function CricketHubPlayer({src,title}:Props){
       <div className="cricket-player__watermark">🏏 CricketHub</div>
 
       {cheers>0&&<div className="cricket-player__cheers" aria-live="polite">
-        {Array.from({length:Math.min(cheers,7)}).map((_,i)=><span key={i} style={{"--i":i} as React.CSSProperties}>🏏</span>)}
+        {Array.from({length:Math.min(cheers,7)}).map((_,i)=><span key={i} style={{"--i":i} as CSSProperties}>🏏</span>)}
       </div>}
     </div>
 
