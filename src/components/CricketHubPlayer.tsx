@@ -161,7 +161,7 @@ export default function CricketHubPlayer({src,title}:Props){
     setQuality(label);setMenu(null);
   };
 
-  return <section ref={root} onMouseMove={wake} onMouseLeave={()=>playing&&setControls(false)} onTouchStart={wake} className={"ch-player "+(theater?"ch-player--theater ":"")+(controls?"ch-player--controls ":"ch-player--clean ")+(ambient?"ch-player--ambient":"")}>
+  return <section ref={root} tabIndex={0} aria-label={title+" player"} onMouseDown={()=>root.current?.focus({preventScroll:true})} onMouseMove={wake} onMouseLeave={()=>playing&&setControls(false)} onTouchStart={wake} className={"ch-player "+(theater?"ch-player--theater ":"")+(controls?"ch-player--controls ":"ch-player--clean ")+(ambient?"ch-player--ambient":"")}>
     <div className="ch-player__ambient"/>
     <header className="ch-player__header">
       <div className="ch-player__title"><div className="ch-player__live"><span/> LIVE <i>•</i> CRICKETHUB</div><strong>{title}</strong></div>
