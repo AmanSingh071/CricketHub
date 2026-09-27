@@ -37,7 +37,7 @@ export default async function Channel({params}:{params:Promise<{id:string}>}){
 
     <div className="mt-4 grid gap-3 sm:grid-cols-3">
       <div className="card rounded-2xl p-4"><p className="text-xs font-black text-green-400">T</p><p className="mt-1 text-sm font-bold">Theater mode</p><p className="mt-1 text-xs text-slate-500">Cinema-style player focus.</p></div>
-      <div className="card rounded-2xl p-4"><p className="text-xs font-black text-green-400">← →</p><p className="mt-1 text-sm font-bold">Quick seek</p><p className="mt-1 text-xs text-slate-500">Jump 10 seconds when the provider supports it.</p></div>
+      <div className="card rounded-2xl p-4"><p className="text-xs font-black text-green-400">← →</p><p className="mt-1 text-sm font-bold">Quick seek</p><p className="mt-1 text-xs text-slate-500">Jump 5 seconds with the keyboard on direct video sources.</p></div>
       <div className="card rounded-2xl p-4"><p className="text-xs font-black text-orange-300">🔥 Cheer</p><p className="mt-1 text-sm font-bold">Match-day fun</p><p className="mt-1 text-xs text-slate-500">Celebrate big moments with animated reactions.</p></div>
     </div>
   </main>
