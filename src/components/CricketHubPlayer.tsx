@@ -72,16 +72,25 @@ export default function CricketHubPlayer({src,title}:Props){
     wake();
   };
   const mute=()=>{
-    if(!media.current)return;
+    if(controllable){if(!media.current)return;
     media.current.muted=!media.current.muted;setMuted(media.current.muted);
-    if(!media.current.muted&&media.current.volume===0){media.current.volume=.8;setVolume(.8);}wake();
+    if(!media.current.muted&&media.current.volume===0){media.current.volume=.8;setVolume(.8);}wake();return;}
+    if(!apiReady||!apiPlayer.current)return;
+    if(type==="youtube"){const m=!!apiPlayer.current.isMuted?.();m?apiPlayer.current.unMute():apiPlayer.current.mute();setMuted(!m);}
+    if(type==="vimeo"){apiPlayer.current.getMuted().then((m:boolean)=>apiPlayer.current.setMuted(!m).then(()=>setMuted(!m))).catch(()=>{});}
+    wake();
   };
   const setVol=(v:number)=>{
-    if(!media.current)return;media.current.volume=v;media.current.muted=v===0;setVolume(v);setMuted(v===0);wake();
+    if(controllable){if(!media.current)return;media.current.volume=v;media.current.muted=v===0;setVolume(v);setMuted(v===0);wake();return;}
+    if(!apiReady||!apiPlayer.current)return;
+    if(type==="youtube"){apiPlayer.current.setVolume(Math.round(v*100));if(v>0)apiPlayer.current.unMute();}
+    if(type==="vimeo"){apiPlayer.current.setVolume(v).catch(()=>{});}
+    setVolume(v);setMuted(v===0);wake();
   };
   const changeVolume=(delta:number)=>{
-    if(!controllable||!media.current)return;
-    const next=Math.max(0,Math.min(1,media.current.volume+delta));
+    if(!canControl)return;
+    const base=controllable&&media.current?media.current.volume:volume;
+    const next=Math.max(0,Math.min(1,base+delta));
     setVol(next);
   };
   const reloadProvider=()=>{if(!controllable){setIframeKey(x=>x+1);wake()}};
