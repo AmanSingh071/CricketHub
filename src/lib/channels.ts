@@ -2,6 +2,8 @@ export type Channel={
   id:string;
   channel_name:string;
   url:string;
+  /** Optional authorized direct HLS/MP4 source. When present, CricketHub can use its custom player controls. */
+  playbackUrl?:string;
   nowPlaying?:string;
   teams?:string[];
 };
