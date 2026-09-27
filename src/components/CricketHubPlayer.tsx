@@ -7,6 +7,7 @@ declare global {
 }
 
 type Props={src:string;title:string};
+type Quality={label:string;index:number;height?:number;bitrate?:number};
 type MediaKind="youtube"|"vimeo"|"hls"|"html5"|"embed";
 const HLS_JS="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js";
 
@@ -37,9 +38,10 @@ export default function CricketHubPlayer({src,title}:Props){
   const type=useMemo(()=>kindOf(src),[src]), controllable=type==="hls"||type==="html5";
   const [playing,setPlaying]=useState(false),[muted,setMuted]=useState(false),[volume,setVolume]=useState(.9);
   const [current,setCurrent]=useState(0),[duration,setDuration]=useState(0),[buffered,setBuffered]=useState(0);
-  const [speed,setSpeed]=useState(1),[quality,setQuality]=useState("Auto"),[theater,setTheater]=useState(false);
+  const [speed,setSpeed]=useState(1),[quality,setQuality]=useState("Auto"),[qualities,setQualities]=useState<Quality[]>([]),[theater,setTheater]=useState(false);
   const [fullscreen,setFullscreen]=useState(false),[controls,setControls]=useState(true),[menu,setMenu]=useState<string|null>(null);
   const [ambient,setAmbient]=useState(false),[autoplay,setAutoplay]=useState(false),[error,setError]=useState("");
+  const autoplayRef=useRef(false);
   const [reaction,setReaction]=useState("🔥"),[reactions,setReactions]=useState<{id:number;emoji:string}[]>([]);
   const progress=duration?Math.min(100,current/duration*100):0,buf=duration?Math.min(100,buffered/duration*100):0;
 
@@ -75,6 +77,7 @@ export default function CricketHubPlayer({src,title}:Props){
 
   useEffect(()=>{
     let dead=false;
+    autoplayRef.current=autoplay;
     const boot=async()=>{
       try{
         setError("");
@@ -85,11 +88,27 @@ export default function CricketHubPlayer({src,title}:Props){
           if(window.Hls?.isSupported()){
             const h=new window.Hls({enableWorker:true,lowLatencyMode:true,maxBufferLength:30});
             hls.current=h;h.loadSource(src);h.attachMedia(v);
+            h.on(window.Hls.Events.MANIFEST_PARSED,()=>{
+              const next=(h.levels||[]).map((level:any,index:number)=>({
+                index,
+                height:Number(level.height)||undefined,
+                bitrate:Number(level.bitrate)||undefined,
+                label:level.height?`${level.height}p`:level.bitrate?`${Math.round(level.bitrate/1000)} kbps`:`Level ${index+1}`
+              }));
+              setQualities(next);
+              setQuality("Auto");
+            });
+            h.on(window.Hls.Events.LEVEL_SWITCHED,(_:any,d:any)=>{
+              if(d?.level>=0){
+                const level=h.levels?.[d.level];
+                setQuality(level?.height?`${level.height}p`:d.level===-1?"Auto":`Level ${d.level+1}`);
+              }
+            });
             h.on(window.Hls.Events.ERROR,(_:any,d:any)=>{if(d?.fatal)setError("Stream playback error — refresh and try again.");});
           }else v.src=src;
         }else v.src=src;
         const loaded=()=>setDuration(v.duration||0),time=()=>setCurrent(v.currentTime||0),prog=()=>{try{setBuffered(v.buffered.length?v.buffered.end(v.buffered.length-1):0)}catch{}};
-        const onPlay=()=>setPlaying(true),onPause=()=>setPlaying(false),onEnd=()=>{setPlaying(false);if(autoplay)v.play().catch(()=>{})};
+        const onPlay=()=>setPlaying(true),onPause=()=>setPlaying(false),onEnd=()=>{setPlaying(false);if(autoplayRef.current)v.play().catch(()=>{})};
         v.addEventListener("loadedmetadata",loaded);v.addEventListener("timeupdate",time);v.addEventListener("progress",prog);
         v.addEventListener("play",onPlay);v.addEventListener("pause",onPause);v.addEventListener("ended",onEnd);
         return()=>{v.removeEventListener("loadedmetadata",loaded);v.removeEventListener("timeupdate",time);v.removeEventListener("progress",prog);v.removeEventListener("play",onPlay);v.removeEventListener("pause",onPause);v.removeEventListener("ended",onEnd);};
@@ -97,7 +116,7 @@ export default function CricketHubPlayer({src,title}:Props){
     };
     const cleanup=boot();
     return()=>{dead=true;hls.current?.destroy?.();hls.current=null;void cleanup;};
-  },[src,type,autoplay,controllable]);
+  },[src,type,controllable]);
 
   useEffect(()=>{
     const key=(e:KeyboardEvent)=>{
@@ -113,6 +132,11 @@ export default function CricketHubPlayer({src,title}:Props){
   const setSeek=(v:number)=>{if(media.current&&duration)media.current.currentTime=v/100*duration;wake()};
   const speeds=[.5,.75,1,1.25,1.5,1.75,2];
   const changeSpeed=(v:number)=>{setSpeed(v);if(media.current)media.current.playbackRate=v;setMenu(null)};
+  const qualityOptions:Quality[]=[{label:"Auto",index:-1},...qualities];
+  const changeQuality=(index:number,label:string)=>{
+    if(hls.current&&type==="hls"){hls.current.currentLevel=index;}
+    setQuality(label);setMenu(null);
+  };
 
   return <section ref={root} onMouseMove={wake} onMouseLeave={()=>playing&&setControls(false)} onTouchStart={wake} className={"ch-player "+(theater?"ch-player--theater ":"")+(controls?"ch-player--controls ":"ch-player--clean ")+(ambient?"ch-player--ambient":"")}>
     <div className="ch-player__ambient"/>
@@ -153,8 +177,8 @@ export default function CricketHubPlayer({src,title}:Props){
         {menu&&<div className="ch-player__menu">
           {menu==="settings"&&<><button onClick={()=>setMenu("speed")}>Speed <b>{speed}×</b><span>›</span></button><button onClick={()=>setMenu("quality")}>Quality <b>{quality}</b><span>›</span></button><button onClick={()=>setAmbient((x)=>!x)}>Ambient glow <b>{ambient?"On":"Off"}</b></button><button onClick={()=>setAutoplay((x)=>!x)}>Autoplay <b>{autoplay?"On":"Off"}</b></button><button onClick={()=>setMenu("stats")}>Stats for nerds <span>›</span></button></>}
           {menu==="speed"&&<><div className="ch-menu-title">Playback speed</div>{speeds.map((v)=><button key={v} className={speed===v?"active":""} onClick={()=>changeSpeed(v)}>{v===1?"Normal":v+"×"} {speed===v&&"✓"}</button>)}</>}
-          {menu==="quality"&&<><div className="ch-menu-title">Stream quality</div>{["Auto","1080p","720p","480p"].map((v)=><button key={v} className={quality===v?"active":""} onClick={()=>{setQuality(v);setMenu(null)}}>{v} {quality===v&&"✓"}</button>)}<p className="ch-menu-note">Quality changes only when the stream exposes multiple renditions.</p></>}
-          {menu==="stats"&&<><div className="ch-menu-title">Stats for nerds</div><div className="ch-stats"><span>Source <b>{type.toUpperCase()}</b></span><span>Buffer <b>{fmt(buffered)}</b></span><span>Speed <b>{speed}×</b></span><span>Mode <b>{theater?"Theater":"Normal"}</b></span></div></>}
+          {menu==="quality"&&<><div className="ch-menu-title">Stream quality</div>{type==="hls"&&qualities.length?qualityOptions.map((q)=><button key={q.label} className={quality===q.label?"active":""} onClick={()=>changeQuality(q.index,q.label)}>{q.label} {quality===q.label&&"✓"}</button>):<><button className="active">{type==="html5"?"Original":"Auto"} ✓</button><p className="ch-menu-note">Manual quality switching is available when an HLS manifest exposes multiple renditions.</p></>}</>}
+          {menu==="stats"&&<><div className="ch-menu-title">Stats for nerds</div><div className="ch-stats"><span>Source <b>{type.toUpperCase()}</b></span><span>Quality <b>{quality}</b></span><span>Buffer <b>{fmt(buffered)}</b></span><span>Speed <b>{speed}×</b></span><span>Mode <b>{theater?"Theater":"Normal"}</b></span></div></>}
         </div>}
       </div>
       {!controllable&&<div className="ch-player__provider-note">Provider controls active · CricketHub cannot control a cross-origin player internally</div>}
