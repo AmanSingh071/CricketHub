@@ -1,30 +1,258 @@
-@import "tailwindcss";
-:root{--bg:#07111f;--panel:#0d1b2a;--panel2:#101f31;--line:#20364d;--text:#f8fafc;--muted:#94a3b8;--green:#22c55e}
-*{box-sizing:border-box}html{background:var(--bg);scroll-behavior:smooth}body{margin:0;min-height:100vh;background:radial-gradient(circle at 10% 0%,rgba(34,197,94,.12),transparent 28%),radial-gradient(circle at 90% 5%,rgba(56,189,248,.09),transparent 24%),var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}a{color:inherit;text-decoration:none}button,input,select{font:inherit}.card{background:linear-gradient(145deg,rgba(16,31,49,.96),rgba(8,20,34,.92));border:1px solid var(--line);box-shadow:0 18px 55px rgba(0,0,0,.18)}.card:hover{border-color:#2e526f}.live-dot{animation:pulse 1.35s infinite}@keyframes pulse{0%,100%{transform:scale(.85);opacity:.65}50%{transform:scale(1.25);opacity:1}}.ticker::-webkit-scrollbar{display:none}.ticker{scrollbar-width:none}.skeleton{background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.1),rgba(255,255,255,.04));background-size:200% 100%;animation:shimmer 1.4s infinite}@keyframes shimmer{to{background-position:-200% 0}}
-.cricket-player{position:relative;overflow:hidden;border:1px solid #24445f;border-radius:1.5rem;background:#020817;box-shadow:0 25px 80px rgba(0,0,0,.35)}
-.cricket-player--theater{position:fixed;inset:0;z-index:80;border-radius:0;background:#000;display:flex;flex-direction:column}
-.cricket-player--theater .cricket-player__stage{flex:1;min-height:0}
-.cricket-player--theater .cricket-player__iframe,.cricket-player--theater video,.cricket-player--theater .plyr{height:100%;max-height:none}
-.cricket-player__topbar,.cricket-player__bar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;background:linear-gradient(180deg,rgba(9,22,37,.98),rgba(5,14,25,.98));border-bottom:1px solid rgba(52,83,110,.7)}
-.cricket-player__bar{border-top:1px solid rgba(52,83,110,.7);border-bottom:0}
-.cricket-player__live{font-size:9px;font-weight:900;letter-spacing:.18em;color:#4ade80;margin-bottom:.15rem}
-.cricket-player__live span{display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;margin-right:5px;box-shadow:0 0 12px #ef4444;animation:pulse 1.1s infinite}
-.cricket-player__stage{position:relative;aspect-ratio:16/9;background:#000;overflow:hidden}
-.cricket-player__iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-.cricket-player__stage video,.cricket-player__stage .plyr{width:100%;height:100%}
-.cricket-player__loading{position:absolute;inset:0;display:grid;place-items:center;background:rgba(2,8,23,.6);backdrop-filter:blur(3px);font-weight:800;color:#dbeafe;pointer-events:none}
-.cricket-player__spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,.15);border-top-color:#22c55e;border-radius:50%;animation:spin .8s linear infinite;margin-right:.6rem}
-@keyframes spin{to{transform:rotate(360deg)}}
-.cricket-player__error{position:absolute;left:1rem;right:1rem;bottom:1rem;padding:.7rem .85rem;border:1px solid rgba(251,191,36,.25);border-radius:.75rem;background:rgba(69,39,5,.92);color:#fde68a;font-size:.75rem;z-index:4}
-.cricket-player__watermark{position:absolute;top:.8rem;right:.9rem;padding:.35rem .55rem;border-radius:.55rem;background:rgba(2,8,23,.65);color:rgba(255,255,255,.72);font-size:10px;font-weight:900;letter-spacing:.08em;pointer-events:none;z-index:3}
-.cricket-player__chip,.cricket-player__action{border:1px solid #29445e;background:rgba(255,255,255,.035);color:#dbeafe;border-radius:.65rem;min-height:2rem;padding:.35rem .65rem;font-size:11px;font-weight:900;cursor:pointer;transition:.18s}
-.cricket-player__chip:hover,.cricket-player__action:hover{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.45);color:#86efac}
-.cricket-player__cheer{border-color:rgba(251,146,60,.35);color:#fed7aa}
-.cricket-player__volume{display:flex;align-items:center;gap:.4rem;color:#cbd5e1}
-.cricket-player__volume input{width:70px;accent-color:#22c55e}
-.cricket-player__hint{display:flex;align-items:center;gap:.8rem;overflow:auto;white-space:nowrap;padding:.55rem .8rem;color:#64748b;background:#06101d;font-size:10px}
-.cricket-player__hint b{color:#cbd5e1}
-.cricket-player__cheers{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
-.cricket-player__cheers span{position:absolute;left:calc(8% + var(--i) * 14%);bottom:-30px;font-size:28px;animation:cheerFloat 1.7s ease-out forwards;animation-delay:calc(var(--i) * 45ms)}
-@keyframes cheerFloat{0%{transform:translateY(0) rotate(0) scale(.6);opacity:0}15%{opacity:1}100%{transform:translateY(-75vh) rotate(360deg) scale(1.15);opacity:0}}
-@media(max-width:640px){.cricket-player{border-radius:1rem}.cricket-player__topbar{padding:.6rem .7rem}.cricket-player__bar{padding:.55rem .65rem}.cricket-player__hint{gap:.55rem;font-size:9px}.cricket-player__volume input{width:52px}.cricket-player__action{padding:.3rem .5rem}.cricket-player__watermark{top:.55rem;right:.55rem}}
+"use client";
+
+import {useCallback,useEffect,useRef,useState} from "react";
+import type {CSSProperties} from "react";
+
+declare global {
+  interface Window {
+    Plyr?: any;
+    Hls?: any;
+  }
+}
+
+type Props={
+  src:string;
+  title:string;
+};
+
+const PLYR_JS="https://cdn.plyr.io/3.8.4/plyr.polyfilled.js";
+const PLYR_CSS="https://cdn.plyr.io/3.8.4/plyr.css";
+const HLS_JS="https://cdn.jsdelivr.net/npm/hls.js@1.6.2/dist/hls.min.js";
+
+function kindOf(src:string){
+  const value=src.toLowerCase().split("?")[0];
+  if(value.includes("youtube.com")||value.includes("youtu.be"))return "youtube";
+  if(value.includes("vimeo.com"))return "vimeo";
+  if(value.endsWith(".m3u8"))return "hls";
+  if(/\.(mp4|webm|ogg|ogv)$/.test(value))return "html5";
+  return "embed";
+}
+
+function loadScript(src:string){
+  return new Promise<void>((resolve,reject)=>{
+    const existing=document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+    if(existing){
+      if((existing as any).dataset.loaded==="true")return resolve();
+      existing.addEventListener("load",()=>resolve(),{once:true});
+      existing.addEventListener("error",()=>reject(new Error(`Failed to load ${src}`)),{once:true});
+      return;
+    }
+    const script=document.createElement("script");
+    script.src=src;
+    script.async=true;
+    script.onload=()=>{script.dataset.loaded="true";resolve()};
+    script.onerror=()=>reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+function loadCss(href:string){
+  if(document.querySelector(`link[href="${href}"]`))return;
+  const link=document.createElement("link");
+  link.rel="stylesheet";
+  link.href=href;
+  document.head.appendChild(link);
+}
+
+export default function CricketHubPlayer({src,title}:Props){
+  const rootRef=useRef<HTMLDivElement>(null);
+  const mediaRef=useRef<HTMLVideoElement>(null);
+  const playerRef=useRef<any>(null);
+  const hlsRef=useRef<any>(null);
+  const [mode,setMode]=useState<"normal"|"theater">("normal");
+  const [loaded,setLoaded]=useState(false);
+  const [error,setError]=useState("");
+  const [cheers,setCheers]=useState(0);
+  const [muted,setMuted]=useState(false);
+  const type=kindOf(src);
+
+  const fullscreen=useCallback(()=>{
+    const element=rootRef.current;
+    if(!element)return;
+    if(document.fullscreenElement)document.exitFullscreen();
+    else element.requestFullscreen?.();
+  },[]);
+
+  const cheer=useCallback(()=>{
+    setCheers(n=>n+1);
+    window.setTimeout(()=>setCheers(n=>Math.max(0,n-1)),1800);
+  },[]);
+
+  useEffect(()=>{
+    loadCss(PLYR_CSS);
+    let cancelled=false;
+
+    async function boot(){
+      try{
+        setError("");
+        await loadScript(PLYR_JS);
+        if(cancelled)return;
+
+        if(type==="hls"&&mediaRef.current){
+          await loadScript(HLS_JS);
+          if(cancelled)return;
+          if(window.Hls?.isSupported()){
+            const hls=new window.Hls({enableWorker:true,lowLatencyMode:true});
+            hlsRef.current=hls;
+            hls.loadSource(src);
+            hls.attachMedia(mediaRef.current);
+          }else{
+            mediaRef.current.src=src;
+          }
+        }else if(type==="html5"&&mediaRef.current){
+          mediaRef.current.src=src;
+        }
+
+        const target=rootRef.current?.querySelector<HTMLElement>(".js-crickethub-player");
+        if(target&&window.Plyr){
+          playerRef.current=new window.Plyr(target,{
+            controls:["play-large","rewind","play","fast-forward","progress","current-time","mute","volume","settings","pip","fullscreen"],
+            seekTime:10,
+            keyboard:{focused:true,global:true},
+            tooltips:{controls:true,seek:true},
+            settings:["speed","loop"],
+            speed:{selected:1,options:[0.5,0.75,1,1.25,1.5,1.75,2]},
+            ratio:"16:9",
+            autoplay:false,
+            hideControls:true,
+            resetOnEnd:false,
+            i18n:{
+              restart:"Restart",
+              rewind:"Rewind {seektime}s",
+              play:"Play",
+              pause:"Pause",
+              fastForward:"Forward {seektime}s",
+              seek:"Seek",
+              seekLabel:"Seek {currentTime} of {duration}",
+              played:"Played",
+              buffered:"Buffered",
+              currentTime:"Current time",
+              duration:"Duration",
+              volume:"Volume",
+              mute:"Mute",
+              unmute:"Unmute",
+              enableCaptions:"Enable captions",
+              disableCaptions:"Disable captions",
+              enterFullscreen:"Enter fullscreen",
+              exitFullscreen:"Exit fullscreen",
+              speed:"Speed",
+              normal:"Normal",
+              loop:"Loop",
+              start:"Start",
+              end:"End",
+              pip:"PIP"
+            }
+          });
+          playerRef.current.on?.("ready",()=>{if(!cancelled)setLoaded(true)});
+          playerRef.current.on?.("error",()=>{if(!cancelled)setError("The media provider reported a playback error.")});
+        }else if(type==="embed"||type==="youtube"||type==="vimeo"){
+          setLoaded(true);
+        }
+      }catch(e){
+        if(!cancelled)setError(e instanceof Error?e.message:"Player failed to initialize.");
+      }
+    }
+
+    boot();
+    return ()=>{
+      cancelled=true;
+      playerRef.current?.destroy?.();
+      playerRef.current=null;
+      hlsRef.current?.destroy?.();
+      hlsRef.current=null;
+    };
+  },[src,type]);
+
+  useEffect(()=>{
+    const onKey=(event:KeyboardEvent)=>{
+      if(event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement)return;
+      if(event.key.toLowerCase()==="t")setMode(m=>m==="normal"?"theater":"normal");
+      if(event.key.toLowerCase()==="f")fullscreen();
+      if(event.key==="ArrowLeft"&&playerRef.current)playerRef.current.currentTime=Math.max(0,(playerRef.current.currentTime||0)-10);
+      if(event.key==="ArrowRight"&&playerRef.current)playerRef.current.currentTime=(playerRef.current.currentTime||0)+10;
+      if(event.key.toLowerCase()==="m"&&playerRef.current){
+        playerRef.current.muted=!playerRef.current.muted;
+        setMuted(!!playerRef.current.muted);
+      }
+    };
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[fullscreen]);
+
+  const setVolume=(value:number)=>{
+    if(playerRef.current)playerRef.current.volume=value;
+    setMuted(value===0);
+  };
+
+  return <section ref={rootRef} className={`cricket-player ${mode==="theater"?"cricket-player--theater":""}`}>
+    <div className="cricket-player__topbar">
+      <div className="min-w-0">
+        <div className="cricket-player__live"><span/> CRICKETHUB PLAYER</div>
+        <h2 className="truncate text-sm font-black sm:text-base">{title}</h2>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <button type="button" className="cricket-player__chip" onClick={()=>setMode(m=>m==="normal"?"theater":"normal")} title="Theater mode">◫ <span className="hidden sm:inline">Theater</span></button>
+        <button type="button" className="cricket-player__chip" onClick={fullscreen} title="Fullscreen">⛶</button>
+      </div>
+    </div>
+
+    <div className="cricket-player__stage">
+      {type==="embed"&&<iframe title={title} src={src} className="cricket-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
+
+      {(type==="html5"||type==="hls")&&<video ref={mediaRef} className="js-crickethub-player" playsInline preload="metadata"/>}
+
+      {(type==="youtube"||type==="vimeo")&&<div className="plyr__video-embed js-crickethub-player">
+        <iframe
+          src={src}
+          title={title}
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowFullScreen
+        />
+      </div>}
+
+      {!loaded&&type!=="embed"&&<div className="cricket-player__loading"><div className="cricket-player__spinner"/>Loading player…</div>}
+      {error&&<div className="cricket-player__error">⚠️ {error}</div>}
+
+      <div className="cricket-player__watermark">🏏 CricketHub</div>
+
+      {cheers>0&&<div className="cricket-player__cheers" aria-live="polite">
+        {Array.from({length:Math.min(cheers,7)}).map((_,i)=><span key={i} style={{"--i":i} as CSSProperties}>🏏</span>)}
+      </div>}
+    </div>
+
+    <div className="cricket-player__bar">
+      <div className="flex items-center gap-2">
+        <button type="button" className="cricket-player__action" onClick={()=>playerRef.current?.play?.()} title="Play">▶</button>
+        <button type="button" className="cricket-player__action" onClick={()=>playerRef.current&&(playerRef.current.currentTime=Math.max(0,(playerRef.current.currentTime||0)-10))} title="Back 10 seconds">↶10</button>
+        <button type="button" className="cricket-player__action" onClick={()=>playerRef.current&&(playerRef.current.currentTime=(playerRef.current.currentTime||0)+10)} title="Forward 10 seconds">10↷</button>
+      </div>
+      <div className="flex items-center gap-2">
+        {(type==="html5"||type==="hls"||type==="youtube"||type==="vimeo")&&<label className="cricket-player__volume" title="Volume"><span>{muted?"🔇":"🔊"}</span><input aria-label="Volume" type="range" min="0" max="1" step="0.05" defaultValue="1" onChange={e=>setVolume(Number(e.target.value))}/></label>}
+        <button type="button" className="cricket-player__action cricket-player__cheer" onClick={cheer}>🔥 Cheer</button>
+      </div>
+    </div>
+
+    <div className="cricket-player__hint">
+      <span>⌨️ <b>Space</b> play</span><span>← → <b>10s</b></span><span><b>T</b> theater</span><span><b>F</b> fullscreen</span><span><b>M</b> mute</span>
+      {type==="embed"&&<span className="ml-auto text-amber-300/80">Provider controls stay inside the embedded player</span>}
+    </div>
+  </section>;
+}
+
+/* CricketHub Player v2 */
+.ch-player{--accent:#22c55e;position:relative;overflow:hidden;background:#000;border:1px solid #1e3347;border-radius:20px;box-shadow:0 28px 90px rgba(0,0,0,.42);isolation:isolate}
+.ch-player--theater{position:fixed;inset:0;z-index:100;border-radius:0;display:flex;flex-direction:column;background:#000}
+.ch-player--theater .ch-player__stage{flex:1;min-height:0;aspect-ratio:auto}
+.ch-player__ambient{position:absolute;inset:-18%;z-index:-1;background:radial-gradient(circle at 50% 50%,rgba(34,197,94,.16),transparent 42%);filter:blur(55px);opacity:.45;pointer-events:none}.ch-player--ambient .ch-player__ambient{opacity:1}
+.ch-player__header{position:absolute;z-index:8;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:linear-gradient(180deg,rgba(0,0,0,.82),transparent);opacity:0;transform:translateY(-8px);transition:.25s;pointer-events:none}.ch-player--controls .ch-player__header{opacity:1;transform:none}
+.ch-player__title{min-width:0}.ch-player__title strong{display:block;max-width:min(65vw,560px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;color:#fff}.ch-player__live{font-size:9px;font-weight:900;letter-spacing:.16em;color:#a7f3d0;margin-bottom:3px}.ch-player__live span{display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;box-shadow:0 0 12px #ef4444;margin-right:5px;animation:pulse 1.1s infinite}.ch-player__live i{font-style:normal;color:#64748b;margin:0 5px}.ch-player__header-actions{display:flex;gap:7px;pointer-events:auto}.ch-player__header-actions button{border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.38);color:#fff;border-radius:9px;width:36px;height:34px;cursor:pointer;backdrop-filter:blur(10px)}
+.ch-player__stage{position:relative;aspect-ratio:16/9;background:#000;overflow:hidden}.ch-player__video-wrap,.ch-player__video,.ch-player__iframe{position:absolute;inset:0;width:100%;height:100%;border:0}.ch-player__video{object-fit:contain;background:#000}.ch-player__top-gradient{position:absolute;inset:0 0 auto;height:35%;background:linear-gradient(180deg,rgba(0,0,0,.4),transparent);pointer-events:none;opacity:0;transition:.25s}.ch-player--controls .ch-player__top-gradient{opacity:1}
+.ch-player__brand{position:absolute;right:16px;top:15px;padding:6px 9px;border-radius:8px;background:rgba(0,0,0,.38);color:rgba(255,255,255,.72);font-size:10px;font-weight:900;letter-spacing:.08em;backdrop-filter:blur(7px);pointer-events:none}.ch-player__live-pill{position:absolute;left:16px;top:17px;padding:5px 8px;border-radius:7px;background:rgba(220,38,38,.85);color:#fff;font-size:9px;font-weight:900;letter-spacing:.1em;opacity:0;transition:.2s}.ch-player--controls .ch-player__live-pill{opacity:1}.ch-player__live-pill span{display:inline-block;width:5px;height:5px;border-radius:50%;background:#fff;margin-right:4px;animation:pulse 1s infinite}
+.ch-player__bigplay{position:absolute;left:50%;top:50%;translate:-50% -50%;width:74px;height:74px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(5,10,15,.66);color:#fff;font-size:25px;display:grid;place-items:center;cursor:pointer;backdrop-filter:blur(9px);box-shadow:0 10px 40px rgba(0,0,0,.35);transition:.2s;z-index:5}.ch-player__bigplay:hover{scale:1.07;background:rgba(34,197,94,.85)}.ch-player__bigplay.is-playing{opacity:0;pointer-events:none}
+.ch-player__controls{position:absolute;z-index:9;left:0;right:0;bottom:0;padding:0 14px 12px;background:linear-gradient(0deg,rgba(0,0,0,.92),rgba(0,0,0,.45) 55%,transparent);opacity:0;transform:translateY(8px);transition:.22s}.ch-player--controls .ch-player__controls{opacity:1;transform:none}.ch-player__timeline-wrap{padding:7px 0 9px}.ch-player__timeline{height:4px;position:relative;border-radius:8px;background:rgba(255,255,255,.22)}.ch-player__timeline:hover{height:6px}.ch-player__timeline input{position:absolute;inset:-7px 0;width:100%;height:18px;opacity:0;cursor:pointer}.ch-player__buffer,.ch-player__played{position:absolute;left:0;top:0;height:100%;border-radius:8px;pointer-events:none}.ch-player__buffer{background:rgba(255,255,255,.3)}.ch-player__played{background:var(--accent)}.ch-player__played:after{content:"";position:absolute;right:-5px;top:50%;width:10px;height:10px;border-radius:50%;background:#fff;translate:0 -50%;box-shadow:0 1px 6px #000}
+.ch-player__control-row{display:flex;align-items:center;justify-content:space-between;gap:10px}.ch-player__left,.ch-player__right{display:flex;align-items:center;gap:5px}.ch-icon-btn,.ch-label-btn{border:0;background:transparent;color:#f8fafc;border-radius:8px;height:34px;min-width:34px;padding:0 7px;display:grid;place-items:center;cursor:pointer;font-weight:800;transition:.16s}.ch-icon-btn:hover,.ch-label-btn:hover{background:rgba(255,255,255,.12)}.ch-icon-btn:disabled{opacity:.45;cursor:not-allowed}.ch-icon-btn small{font-size:8px;margin-left:1px}.ch-label-btn{font-size:11px}.ch-volume{display:flex;align-items:center;gap:3px}.ch-volume input{width:68px;accent-color:var(--accent)}.ch-time{font-size:11px;color:#e2e8f0;white-space:nowrap}.ch-reaction{font-size:18px}
+.ch-player__menu{position:absolute;right:14px;bottom:65px;width:225px;padding:8px;border:1px solid rgba(255,255,255,.15);border-radius:12px;background:rgba(10,16,23,.96);box-shadow:0 18px 55px rgba(0,0,0,.5);backdrop-filter:blur(18px);z-index:20}.ch-player__menu button{width:100%;border:0;background:transparent;color:#e2e8f0;text-align:left;padding:9px 10px;border-radius:7px;font-size:12px;cursor:pointer}.ch-player__menu button:hover,.ch-player__menu button.active{background:rgba(34,197,94,.12);color:#86efac}.ch-player__menu button b{float:right;color:#94a3b8}.ch-player__menu button span{float:right}.ch-menu-title{padding:7px 10px 9px;color:#fff;font-size:12px;font-weight:900;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:4px}.ch-menu-note{padding:7px 10px;color:#64748b;font-size:10px;line-height:1.5}.ch-stats{display:grid;gap:6px;padding:6px 10px 9px;color:#94a3b8;font-size:10px}.ch-stats b{float:right;color:#e2e8f0}
+.ch-player__provider-note{position:absolute;right:14px;bottom:88px;z-index:7;padding:6px 9px;border-radius:7px;background:rgba(0,0,0,.58);color:#94a3b8;font-size:9px;opacity:0;transition:.2s;pointer-events:none}.ch-player--controls .ch-player__provider-note{opacity:1}.ch-player__error{position:absolute;left:15px;right:15px;bottom:85px;z-index:25;padding:10px 12px;border:1px solid rgba(251,191,36,.25);border-radius:9px;background:rgba(69,39,5,.92);color:#fde68a;font-size:11px}.ch-player__reactions{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:30}.ch-player__reactions span{position:absolute;bottom:-45px;font-size:34px;animation:chReact 1.7s ease-out forwards}.ch-player__reactions span:nth-child(1){left:8%}.ch-player__reactions span:nth-child(2){left:20%;animation-delay:.08s}.ch-player__reactions span:nth-child(3){left:35%;animation-delay:.16s}.ch-player__reactions span:nth-child(4){left:50%;animation-delay:.04s}.ch-player__reactions span:nth-child(5){left:65%;animation-delay:.12s}.ch-player__reactions span:nth-child(6){left:78%;animation-delay:.2s}@keyframes chReact{0%{transform:translateY(0) scale(.5) rotate(-10deg);opacity:0}12%{opacity:1}100%{transform:translateY(-78vh) scale(1.25) rotate(30deg);opacity:0}}
+.ch-player__footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 13px;background:#050b12;border-top:1px solid #17283a;color:#64748b;font-size:10px}.ch-player__footer b{color:#4ade80;font-size:9px;letter-spacing:.08em}.ch-player__footer span{color:#cbd5e1}.ch-shortcuts{display:flex;align-items:center;gap:7px}.ch-shortcuts span{padding:2px 5px;border:1px solid #24384c;border-radius:4px;color:#94a3b8}
+@media(max-width:700px){.ch-player{border-radius:14px}.ch-player__header{padding:10px 11px}.ch-player__title strong{font-size:12px;max-width:55vw}.ch-player__brand{top:10px;right:10px;font-size:8px}.ch-player__live-pill{top:11px;left:11px;font-size:8px}.ch-player__controls{padding:0 7px 7px}.ch-volume input{width:42px}.ch-time{font-size:9px}.ch-icon-btn,.ch-label-btn{height:31px;min-width:29px;padding:0 4px}.ch-player__footer{padding:7px 9px}.ch-shortcuts{display:none}.ch-player__menu{right:7px;bottom:55px;width:205px}.ch-player__provider-note{right:7px;bottom:58px;font-size:8px;max-width:75%}}
+@media(prefers-reduced-motion:reduce){.ch-player *{animation:none!important;transition:none!important}}
