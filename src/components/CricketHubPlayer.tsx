@@ -34,12 +34,12 @@ function fmt(n:number){
 }
 
 export default function CricketHubPlayer({src,title}:Props){
-  const root=useRef<HTMLDivElement>(null),media=useRef<HTMLVideoElement>(null),hls=useRef<any>(null),timer=useRef<number|null>(null);
+  const root=useRef<HTMLDivElement>(null),media=useRef<HTMLVideoElement>(null),hls=useRef<any>(null),timer=useRef<number|null>(null),iframe=useRef<HTMLIFrameElement>(null);
   const type=useMemo(()=>kindOf(src),[src]), controllable=type==="hls"||type==="html5";
   const [playing,setPlaying]=useState(false),[muted,setMuted]=useState(false),[volume,setVolume]=useState(.9);
   const [current,setCurrent]=useState(0),[duration,setDuration]=useState(0),[buffered,setBuffered]=useState(0);
   const [speed,setSpeed]=useState(1),[quality,setQuality]=useState("Auto"),[qualities,setQualities]=useState<Quality[]>([]),[theater,setTheater]=useState(false);
-  const [fullscreen,setFullscreen]=useState(false),[controls,setControls]=useState(true),[menu,setMenu]=useState<string|null>(null);
+  const [fullscreen,setFullscreen]=useState(false),[controls,setControls]=useState(true),[menu,setMenu]=useState<string|null>(null),[iframeKey,setIframeKey]=useState(0),[copied,setCopied]=useState(false);
   const [ambient,setAmbient]=useState(false),[autoplay,setAutoplay]=useState(false),[error,setError]=useState("");
   const autoplayRef=useRef(false);
   const [reaction,setReaction]=useState("🔥"),[reactions,setReactions]=useState<{id:number;emoji:string}[]>([]);
@@ -70,6 +70,9 @@ export default function CricketHubPlayer({src,title}:Props){
   const setVol=(v:number)=>{
     if(!media.current)return;media.current.volume=v;media.current.muted=v===0;setVolume(v);setMuted(v===0);wake();
   };
+  const reloadProvider=()=>{if(!controllable){setIframeKey(x=>x+1);wake()}};
+  const openProvider=()=>{window.open(src,"_blank","noopener,noreferrer")};
+  const copyProvider=async()=>{try{await navigator.clipboard.writeText(src);setCopied(true);window.setTimeout(()=>setCopied(false),1600)}catch{}};
   const send=(emoji:string)=>{
     setReaction(emoji);const id=Date.now()+Math.random();
     setReactions((x)=>[...x,{id,emoji}].slice(-8));setTimeout(()=>setReactions((x)=>x.filter((r)=>r.id!==id)),1800);
@@ -123,7 +126,7 @@ export default function CricketHubPlayer({src,title}:Props){
       if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;
       const k=e.key.toLowerCase();
       if(e.key===" "){e.preventDefault();play()}else if(e.key==="ArrowLeft"){e.preventDefault();seek(-10)}else if(e.key==="ArrowRight"){e.preventDefault();seek(10)}
-      else if(k==="m"){e.preventDefault();mute()}else if(k==="f"){e.preventDefault();void full()}else if(k==="t"){e.preventDefault();setTheater((x)=>!x)}else if(e.key==="Escape"){setMenu(null);setTheater(false)}
+      else if(k==="m"){e.preventDefault();mute()}else if(k==="f"){e.preventDefault();void full()}else if(k==="t"){e.preventDefault();setTheater((x)=>!x)}else if(k==="r"&&!controllable){e.preventDefault();reloadProvider()}else if(k==="o"&&!controllable){e.preventDefault();openProvider()}else if(e.key==="Escape"){setMenu(null);setTheater(false)}
     };
     addEventListener("keydown",key);return()=>removeEventListener("keydown",key);
   });
@@ -142,7 +145,7 @@ export default function CricketHubPlayer({src,title}:Props){
     <div className="ch-player__ambient"/>
     <header className="ch-player__header">
       <div className="ch-player__title"><div className="ch-player__live"><span/> LIVE <i>•</i> CRICKETHUB</div><strong>{title}</strong></div>
-      <div className="ch-player__header-actions"><button onClick={()=>setTheater((x)=>!x)} title="Theater">▣</button><button onClick={()=>void full()} title="Fullscreen">⛶</button></div>
+      <div className="ch-player__header-actions"><button onClick={()=>setTheater((x)=>!x)} title="Theater">▣</button>{!controllable&&<><button onClick={reloadProvider} title="Reload provider">↻</button><button onClick={openProvider} title="Open provider">↗</button></>}<button onClick={()=>void full()} title="Fullscreen">⛶</button></div>
     </header>
     <div className="ch-player__stage" onDoubleClick={(e)=>{
       if((e.target as HTMLElement).closest(".ch-player__controls"))return;
@@ -150,7 +153,7 @@ export default function CricketHubPlayer({src,title}:Props){
     }}>
       <div className="ch-player__video-wrap">
         {controllable&&<video ref={media} playsInline preload="metadata" className="ch-player__video" onClick={play}/>}
-        {!controllable&&<iframe title={title} src={src} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
+        {!controllable&&<iframe key={iframeKey} ref={iframe} title={title} src={src} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
       </div>
       <div className="ch-player__top-gradient"/>
       <div className="ch-player__brand">🏏 CricketHub</div>
@@ -171,7 +174,7 @@ export default function CricketHubPlayer({src,title}:Props){
           <div className="ch-player__right">
             <button className="ch-icon-btn ch-reaction" onClick={()=>send(reaction)} title="Reaction">{reaction}</button>
             {controllable&&<><button className="ch-label-btn" onClick={()=>setMenu(menu==="speed"?null:"speed")}>{speed}×</button><button className="ch-icon-btn" onClick={()=>setMenu(menu==="settings"?null:"settings")}>⚙</button></>}
-            <button className="ch-icon-btn" onClick={()=>setTheater((x)=>!x)}>▣</button><button className="ch-icon-btn" onClick={()=>void full()}>⛶</button>
+            <button className="ch-icon-btn" onClick={()=>setTheater((x)=>!x)}>▣</button>{!controllable&&<><button className="ch-icon-btn" onClick={reloadProvider} title="Reload">↻</button><button className="ch-icon-btn" onClick={openProvider} title="Open in new tab">↗</button><button className="ch-icon-btn" onClick={copyProvider} title="Copy provider URL">{copied?"✓":"⧉"}</button></>}<button className="ch-icon-btn" onClick={()=>void full()}>⛶</button>
           </div>
         </div>
         {menu&&<div className="ch-player__menu">
