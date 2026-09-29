@@ -112,38 +112,43 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
     get("https://www.cricbuzz.com"+candidate.slug),
     get("https://m.cricbuzz.com/live-cricket-scorecard/"+candidate.id)
   ]);
-  const html=page.status==="fulfilled" ? page.value : (mobile.status==="fulfilled" ? mobile.value : "");
-  if(!html)return null;
+  const html=page.status==="fulfilled" ? page.value : "";
+  const mobileHtml=mobile.status==="fulfilled" ? mobile.value : "";
+  const source=html||mobileHtml;
+  if(!source)return null;
 
-  const lines=htmlLines(html);
-  // Use the match page's own heading instead of searching the first chunk of
-  // the document. The latter can contain unrelated completed-match links.
-  const heading=lines.find(x=>/-\s*Commentary\b/i.test(x))||candidate.name;
-  const pageName=clean(heading.replace(/^#\s*/,"").replace(/\s+-\s*Commentary\b.*$/i,""));
-  const teams=split(pageName).length===2?split(pageName):split(candidate.name);
+  const lines=htmlLines(source);
+  const mobileLines=mobile.status==="fulfilled" ? htmlLines(mobileHtml) : [];
+  const teams=split(candidate.name);
   if(teams.length!==2)return null;
 
-  const mobileLines=mobile.status==="fulfilled" ? htmlLines(mobile.value) : [];
-  const score=parseScore(lines,teams);
-  const fallbackScore=parseScore(mobileLines,teams);
-  const finalScore=score.length?score:fallbackScore;
+  // Cricbuzz currently renders live scores as separate text nodes such as
+  // 282 / -7 / (87), while other pages use 282-7 (87). Validate the raw
+  // document so either representation works.
+  const raw=source.replace(/<script[\\s\\S]*?<\\/script>/gi," ").replace(/<style[\\s\\S]*?<\\/style>/gi," ");
+  const scoreMatch=raw.match(/\\b(\\d{1,4})\\s*(?:-|\\/|<[^>]*>[-\\/]<[^>]*>)\\s*(\\d{1,2})\\s*(?:<[^>]*>\\s*)?\\((\\d+(?:\\.\\d+)?)\\s*(?:Ov|Overs)?\\)/i)
+    || raw.match(/\\b(\\d{1,4})\\s*-\\s*(\\d{1,2})\\s*\\((\\d+(?:\\.\\d+)?)\\)/i);
+  const parsed=parseScore(lines,teams);
+  const fallback=parseScore(mobileLines,teams);
+  const score=parsed.length?parsed:fallback;
+  if(!score.length && scoreMatch){
+    score.push({inning:teams[0]||"Current innings",r:Number(scoreMatch[1]),w:Number(scoreMatch[2]),o:scoreMatch[3]});
+  }
 
-  // Live pages currently expose a score + session marker. Upcoming pages have
-  // "Match starts at", while completed pages expose a result. Check those
-  // signals on the actual match page only.
-  const localText=lines.slice(60,220).join(" ");
-  if(upcoming(localText))return null;
-  if(/\b(?:won by|match drawn|no result|abandoned|cancelled|match completed|concluded)\b/i.test(localText))return null;
-  if(!finalScore.length)return null;
+  const joined=lines.join(" ");
+  const upcomingNow=/\\b(?:match starts at|scorecard will appear once the match starts|has not started)\\b/i.test(joined);
+  const terminalNow=/\\b(?:won by|match drawn|no result|abandoned|cancelled|match completed|concluded|result\\s*[-:])\\b/i.test(joined);
+  if(upcomingNow||terminalNow||!score.length)return null;
 
   const status=extractStatus(lines);
+  const name=clean(candidate.name);
   return {
     id:candidate.id,
-    name:pageName,
+    name,
     teams,
     teamInfo:teams.map(name=>({name})),
-    score:finalScore,
-    status,
+    score:score.slice(0,4),
+    status:status==="Live" ? "Live" : status,
     matchStarted:true,
     matchEnded:false,
     source:"cricbuzz-verified-html"
