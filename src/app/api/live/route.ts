@@ -125,9 +125,9 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   // Cricbuzz currently renders live scores as separate text nodes such as
   // 282 / -7 / (87), while other pages use 282-7 (87). Validate the raw
   // document so either representation works.
-  const raw=source.replace(/<script[\\s\\S]*?<\\/script>/gi," ").replace(/<style[\\s\\S]*?<\\/style>/gi," ");
-  const scoreMatch=raw.match(/\\b(\\d{1,4})\\s*(?:-|\\/|<[^>]*>[-\\/]<[^>]*>)\\s*(\\d{1,2})\\s*(?:<[^>]*>\\s*)?\\((\\d+(?:\\.\\d+)?)\\s*(?:Ov|Overs)?\\)/i)
-    || raw.match(/\\b(\\d{1,4})\\s*-\\s*(\\d{1,2})\\s*\\((\\d+(?:\\.\\d+)?)\\)/i);
+  const raw=source.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ");
+  const scoreMatch=raw.match(/\b(\d{1,4})\s*(?:-|\/|<[^>]*>[-\/]<[^>]*>)\s*(\d{1,2})\s*(?:<[^>]*>\s*)?\((\d+(?:\.\d+)?)\s*(?:Ov|Overs)?\)/i)
+    || raw.match(/\b(\d{1,4})\s*-\s*(\d{1,2})\s*\((\d+(?:\.\d+)?)\)/i);
   const parsed=parseScore(lines,teams);
   const fallback=parseScore(mobileLines,teams);
   const score=parsed.length?parsed:fallback;
@@ -136,8 +136,8 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   }
 
   const joined=lines.join(" ");
-  const upcomingNow=/\\b(?:match starts at|scorecard will appear once the match starts|has not started)\\b/i.test(joined);
-  const terminalNow=/\\b(?:won by|match drawn|no result|abandoned|cancelled|match completed|concluded|result\\s*[-:])\\b/i.test(joined);
+  const upcomingNow=/\b(?:match starts at|scorecard will appear once the match starts|has not started)\b/i.test(joined);
+  const terminalNow=/\b(?:won by|match drawn|no result|abandoned|cancelled|match completed|concluded|result\s*[-:])\b/i.test(joined);
   if(upcomingNow||terminalNow||!score.length)return null;
 
   const status=extractStatus(lines);
