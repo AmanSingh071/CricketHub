@@ -11,13 +11,13 @@ const split=(s:string)=>{const m=s.match(/^(.+?)\s+vs\.?\s+(.+?)(?:\s*,|$)/i);re
 const dateNear=(html:string,pos:number)=>{const before=clean(html.slice(Math.max(0,pos-10000),pos));const hits=[...before.matchAll(/\b(?:MON|TUE|WED|THU|FRI|SAT|SUN),\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{1,2}\s+202\d\b/gi)];return hits.length?hits[hits.length-1][0]:""};
 function parseRecent(html:string){
  const out=new Map<string,any>();
- const re=/<a\\b[^>]*href=["']([^"']*\\/live-cricket-(?:scores|scorecard)\\/(\\d+)(?:\\/[^"']*)?)["'][^>]*>([\\s\\S]*?)<\\/a>/gi;
+ const re=/<a\b[^>]*href=["']([^"']*\/live-cricket-(?:scores|scorecard)\/(\d+)(?:\/[^"']*)?)["'][^>]*>([\s\S]*?)<\/a>/gi;
  let m:RegExpExecArray|null;
  while((m=re.exec(html))){
    const id=m[2],name=clean(m[3]),teams=split(name);
    if(!id||!name||teams.length!==2)continue;
    const near=clean(html.slice(Math.max(0,m.index-5000),Math.min(html.length,m.index+5000)));
-   if(!/\\b(?:won by|match drawn|no result|abandoned|cancelled)\\b/i.test(near))continue;
+   if(!/\b(?:won by|match drawn|no result|abandoned|cancelled)\b/i.test(near))continue;
    const date=dateNear(html,m.index);
    if(!date)continue;
    out.set(id,{id,name,teams,date,status:"Completed",matchStarted:true,matchEnded:true,source:"cricbuzz-recent-html"});
