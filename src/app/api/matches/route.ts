@@ -32,7 +32,7 @@ function parseUpcoming(html:string){
  const re=/<a\b[^>]*href=["']([^"']*\/live-cricket-(?:scores|scorecard)\/(\d+)(?:\/[^"']*)?)["'][^>]*>([\s\S]*?)<\/a>/gi;
  let m:RegExpExecArray|null;
  while((m=re.exec(html))){
-   const id=m[2],name=clean(m[3]),teams=split(name),date=dateNear(html,m.index);
+   const id=m[2],rawName=clean(m[3]),name=rawName.replace(/\s*,\s*.*$/,""),teams=split(name),date=dateNear(html,m.index);
    if(!id||!name||teams.length!==2||!date)continue;
    out.set(id,{id,name,teams,date,status:"Upcoming",matchStarted:false,matchEnded:false,source:"cricbuzz-upcoming-html"});
  }
@@ -49,8 +49,9 @@ export async function GET(){
  const [live,recentFromApi,recentDated,upcoming]=await Promise.all([getCurrentMatches(),getRecentMatches(),fetchRecentDated(),fetchUpcoming()]);
  const recent=[...new Map([...recentFromApi,...recentDated].map(m=>[String(m.id),m])).values()];
  const liveIds=new Set(live.map(m=>String(m.id)));
- const now=Date.now(),today=new Date();const todayUtc=Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate());
- const recent2d=recent.filter((m:any)=>{const d=dayValue(String(m.date||""));return Number.isFinite(d)&&d>=todayUtc-2*86400000&&d<=todayUtc&&!liveIds.has(String(m.id));});
+ const today=new Date();const todayUtc=Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate());
+ const datedRecent=recent.filter((m:any)=>{const d=dayValue(String(m.date||""));return Number.isFinite(d)&&d>=todayUtc-2*86400000&&d<=todayUtc&&!liveIds.has(String(m.id));});
+ const recent2d=datedRecent.length?datedRecent:recent.filter(m=>!liveIds.has(String(m.id))).slice(0,30);
  const upcomingRows=upcoming.filter(m=>{const d=dayValue(String(m.date||""));return Number.isFinite(d)&&d>=todayUtc&&!liveIds.has(String(m.id))&&!recent2d.some(r=>String(r.id)===String(m.id));}).sort((a,b)=>dayValue(a.date)-dayValue(b.date));
  return NextResponse.json({updatedAt:new Date().toISOString(),ongoing:live,upcoming:upcomingRows,recent:recent2d,counts:{ongoing:live.length,upcoming:upcomingRows.length,recent:recent2d.length}},{headers:{"Cache-Control":"no-store, max-age=0"}});
 }
