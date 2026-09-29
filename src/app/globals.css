@@ -73,3 +73,21 @@
 .ch-player--provider .ch-player__stage{z-index:1}
 .ch-player--provider .ch-player__iframe{z-index:20}
 .ch-player--provider .ch-player__reactions{z-index:30}
+
+/* Mobile player refresh: maximize video area and keep provider controls clean. */
+@media(max-width:700px){
+  .ch-player{border-radius:10px;margin-left:-12px;margin-right:-12px;width:calc(100% + 24px);box-shadow:0 16px 45px rgba(0,0,0,.35)}
+  .ch-player__stage{aspect-ratio:16/10;min-height:220px}
+  .ch-player__footer{min-height:38px;padding:7px 10px;font-size:9px}
+  .ch-player__footer>div:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ch-player__shortcuts,.ch-shortcuts{display:none!important}
+  .ch-player--provider .ch-player__header,.ch-player--provider .ch-player__controls,.ch-player--provider .ch-player__provider-note,.ch-player--provider .ch-player__brand,.ch-player--provider .ch-player__live-pill{display:none!important}
+  .ch-player--provider .ch-player__stage{aspect-ratio:16/10;min-height:220px}
+  .ch-player--provider .ch-player__iframe{position:absolute;inset:0;width:100%;height:100%}
+  .ch-player:not(.ch-player--provider) .ch-player__header{padding:8px 10px}
+  .ch-player:not(.ch-player--provider) .ch-player__header-actions{gap:3px}
+  .ch-player:not(.ch-player--provider) .ch-player__header-actions button{width:32px;height:30px}
+  .ch-player:not(.ch-player--provider) .ch-player__controls{padding:0 8px 8px}
+  .ch-player:not(.ch-player--provider) .ch-player__control-row{gap:4px}
+  .ch-player:not(.ch-player--provider) .ch-icon-btn,.ch-player:not(.ch-player--provider) .ch-label-btn{height:34px;min-width:34px}
+}
