@@ -119,7 +119,7 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   // Use the match page's own heading instead of searching the first chunk of
   // the document. The latter can contain unrelated completed-match links.
   const heading=lines.find(x=>/-\s*Commentary\b/i.test(x))||candidate.name;
-  const pageName=clean(heading.replace(/\s+-\s*Commentary\b.*$/i,""));
+  const pageName=clean(heading.replace(/^#\s*/,"").replace(/\s+-\s*Commentary\b.*$/i,""));
   const teams=split(pageName).length===2?split(pageName):split(candidate.name);
   if(teams.length!==2)return null;
 
