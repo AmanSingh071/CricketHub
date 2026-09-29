@@ -67,3 +67,9 @@
 .ch-player__header-actions button:active,.ch-player__controls button:active{transform:scale(.94)}
 .ch-player__provider-note{max-width:min(520px,calc(100% - 28px));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:700px){.ch-player__provider-note{font-size:8px;bottom:55px}}
+
+/* Provider embeds must remain fully clickable; the cross-origin iframe owns its controls. */
+.ch-player--provider .ch-player__header,.ch-player--provider .ch-player__controls,.ch-player--provider .ch-player__provider-note,.ch-player--provider .ch-player__brand,.ch-player--provider .ch-player__live-pill,.ch-player--provider .ch-player__error{pointer-events:none}
+.ch-player--provider .ch-player__stage{z-index:1}
+.ch-player--provider .ch-player__iframe{z-index:20}
+.ch-player--provider .ch-player__reactions{z-index:30}
