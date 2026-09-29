@@ -49,25 +49,28 @@ function htmlLines(html:string){
 function parseScore(lines:string[],teams:string[]):Score[]{
   const out:Score[]=[];
   const seen=new Set<string>();
-  for(let i=0;i<lines.length;i++){
-    if(!/\b(?:1st|2nd|3rd|4th)\s+Inn(?:ings)?\b/i.test(lines[i]))continue;
-    let end=Math.min(lines.length,i+120);
-    for(let k=i+1;k<Math.min(lines.length,i+120);k++){
-      if(/\b(?:1st|2nd|3rd|4th)\s+Inn(?:ings)?\b/i.test(lines[k])||/^INFO$/i.test(lines[k])){end=k;break;}
-    }
-    const block=lines.slice(i,end);
-    const joined=block.join(" ");
-    const m=joined.match(/(?:Total\s*)?(\d+)\s*-\s*(\d+)(?:\s*(?:d|all out))?\s*\(([\d.]+)\s*(?:Ov|Overs)\b/i);
-    if(!m)continue;
-    const team=clean(lines[i].replace(/\s+(?:1st|2nd|3rd|4th)\s+Inn(?:ings)?\b.*$/i,""))||teams[out.length]||"Innings";
-    const row={inning:lines[i],r:Number(m[1]),w:Number(m[2]),o:m[3]};
+  const add=(inning:string,r:string,w:string,o:string)=>{
+    const row={inning:clean(inning)||teams[out.length]||"Current innings",r:Number(r),w:Number(w),o};
     const key=JSON.stringify(row);
-    if(!seen.has(key)){seen.add(key);out.push(row);}
-  }
-  if(!out.length){
-    const joined=lines.join(" ");
-    const m=joined.match(/\b(\d+)\s*-\s*(\d+)\s*\(([\d.]+)\s*(?:Ov|Overs)\b/i);
-    if(m)out.push({inning:teams[0]||"Current innings",r:Number(m[1]),w:Number(m[2]),o:m[3]});
+    if(Number.isFinite(row.r)&&Number.isFinite(row.w)&&!seen.has(key)){seen.add(key);out.push(row);}
+  };
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    const legacy=line.match(/(?:Total\s*)?(\d+)\s*-\s*(\d+)(?:\s*(?:d|all out))?\s*\(([\d.]+)\s*(?:Ov|Overs)\b/i);
+    if(legacy){add(line.replace(legacy[0],""),legacy[1],legacy[2],legacy[3]);continue;}
+    // Current Cricbuzz markup renders the score as separate text nodes:
+    // TEAM / RUNS / - / WICKETS / (OVERS).
+    if(!/^\d+$/.test(line))continue;
+    const r=line;
+    if(lines[i+1]!=="-"||!/^\d+$/.test(lines[i+2]||""))continue;
+    const w=lines[i+2];
+    const ov=String(lines[i+3]||"").match(/^\(([\d.]+)\)$/);
+    if(!ov)continue;
+    let team="";
+    for(let k=i-1;k>=Math.max(0,i-4);k--){
+      if(lines[k]&&!/^\d+$/.test(lines[k])&&lines[k]!=="-"&&!/^\([\d.]+\)$/.test(lines[k])){team=lines[k];break;}
+    }
+    add(team,r,w,ov[1]);
   }
   return out.slice(0,4);
 }
@@ -113,27 +116,33 @@ async function verify(candidate:{id:string;name:string;slug:string}):Promise<Mat
   if(!html)return null;
 
   const lines=htmlLines(html);
-  const joined=lines.join(" ");
-  const pos=joined.toLowerCase().indexOf(candidate.name.toLowerCase());
-  const matchSurface=pos>=0 ? joined.slice(pos,pos+1800) : joined.slice(0,1800);
-  if(terminal(matchSurface)||upcoming(matchSurface))return null;
-
-  const teams=split(candidate.name);
+  // Use the match page's own heading instead of searching the first chunk of
+  // the document. The latter can contain unrelated completed-match links.
+  const heading=lines.find(x=>/-\s*Commentary\b/i.test(x))||candidate.name;
+  const pageName=clean(heading.replace(/\s+-\s*Commentary\b.*$/i,""));
+  const teams=split(pageName).length===2?split(pageName):split(candidate.name);
   if(teams.length!==2)return null;
 
-  // Prefer the scorecard page for innings totals, while using the exact
-  // match page for status classification.
   const mobileLines=mobile.status==="fulfilled" ? htmlLines(mobile.value) : [];
-  const score=parseScore(lines,teams).length ? parseScore(lines,teams) : parseScore(mobileLines,teams);
-  const status=extractStatus(lines);
-  if(terminal(status))return null;
+  const score=parseScore(lines,teams);
+  const fallbackScore=parseScore(mobileLines,teams);
+  const finalScore=score.length?score:fallbackScore;
 
+  // Live pages currently expose a score + session marker. Upcoming pages have
+  // "Match starts at", while completed pages expose a result. Check those
+  // signals on the actual match page only.
+  const localText=lines.slice(60,220).join(" ");
+  if(upcoming(localText))return null;
+  if(/\b(?:won by|match drawn|no result|abandoned|cancelled|match completed|concluded)\b/i.test(localText))return null;
+  if(!finalScore.length)return null;
+
+  const status=extractStatus(lines);
   return {
     id:candidate.id,
-    name:candidate.name,
+    name:pageName,
     teams,
     teamInfo:teams.map(name=>({name})),
-    score,
+    score:finalScore,
     status,
     matchStarted:true,
     matchEnded:false,
