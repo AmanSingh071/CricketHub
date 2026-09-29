@@ -34,6 +34,7 @@
 .ch-player--theater{position:fixed;left:0;right:0;top:0;bottom:0;z-index:100;border-radius:0;display:flex;flex-direction:column;background:#000}
 .ch-player--theater .ch-player__stage{flex:1;min-height:0;aspect-ratio:auto}
 .ch-player__stage{position:relative;aspect-ratio:16/9;background:#000;overflow:hidden}
+.ch-player__top-gradient{pointer-events:none}
 .ch-player__video-wrap,.ch-player__video,.ch-player__iframe{position:absolute;left:0;right:0;top:0;bottom:0;width:100%;height:100%;border:0}
 .ch-player__video{object-fit:contain;background:#000}
 .ch-player__header{position:absolute;z-index:8;left:0;right:0;top:0;display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:linear-gradient(180deg,rgba(0,0,0,.88),transparent);opacity:0;transform:translateY(-8px);transition:opacity .2s,transform .2s;pointer-events:none}
