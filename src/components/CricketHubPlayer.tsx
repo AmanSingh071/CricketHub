@@ -214,7 +214,7 @@ export default function CricketHubPlayer({src,title}:Props){
     }}>
       <div className="ch-player__video-wrap">
         {controllable&&<video ref={media} playsInline preload="auto" className="ch-player__video" onClick={play}/>}
-        {!controllable&&<iframe key={iframeKey} ref={iframe} title={title} src={(type==="youtube" ? src+(src.includes("?")?"&":"?")+"enablejsapi=1&origin="+encodeURIComponent(window.location.origin) : src)} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; display-capture" allowFullScreen/>}
+        {!controllable&&<iframe key={iframeKey} ref={iframe} title={title} src={(type==="youtube" ? src+(src.includes("?")?"&":"?")+"enablejsapi=1&origin="+encodeURIComponent(window.location.origin) : src)} className="ch-player__iframe" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; web-share" allowFullScreen loading="eager" referrerPolicy="strict-origin-when-cross-origin"/>}
       </div>
       <div className="ch-player__top-gradient"/>
       <div className="ch-player__brand">🏏 CricketHub</div>
