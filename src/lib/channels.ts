@@ -11,6 +11,7 @@ export type Channel={
 export const channels:Channel[]=[
   {id:"willow-cricket",channel_name:"Willow Cricket",url:"https://embed.st/embed/admin/admin-willow-cricket/1"},
   {id:"willow-2-cricket",channel_name:"Willow 2 Cricket",url:"https://embed.st/embed/admin/admin-willow-cricket/2"},
+  {id:"willow-sports",channel_name:"Willow Sports",url:""},
   {id:"sony-ten-1",channel_name:"SONY TEN 1",url:"https://daddylive.app/player/embed.php?id=885"},
   {id:"sony-ten-2",channel_name:"SONY TEN 2",url:"https://daddylive.app/player/embed.php?id=886"},
   {id:"sony-ten-3",channel_name:"SONY TEN 3",url:"https://daddylive.app/player/embed.php?id=887"},
