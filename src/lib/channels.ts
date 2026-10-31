@@ -9,7 +9,7 @@ export type Channel={
 };
 
 export const channels:Channel[]=[
-  {id:"willow-cricket",channel_name:"Willow Cricket",url:"https://embed.st/embed/admin/admin-willow-cricket/1"},
+  {id:"willow-cricket",channel_name:"Willow Cricket",url:"https://taifood-blog.asia/embed/247-willow"},
   {id:"willow-2-cricket",channel_name:"Willow 2 Cricket",url:"https://embed.st/embed/admin/admin-willow-cricket/2"},
   {id:"willow-sports",channel_name:"Willow Sports",url:"https://embed.st/embed/admin/admin-willow-cricket/6"},
   {id:"sony-ten-1",channel_name:"SONY TEN 1",url:"https://embed.st/embed/foxtrot/india-vs-brazil/1"},
